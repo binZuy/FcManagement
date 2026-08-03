@@ -1,0 +1,294 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─── NextAuth required tables ────────────────────────────────────────────────
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// ─── Whitelist emails (only these can login) ─────────────────────────────────
+
+model AllowedEmail {
+  id          String   @id @default(cuid())
+  email       String   @unique
+  label       String?  // Ghi chú (tên thật, biệt danh)
+  addedAt     DateTime @default(now())
+
+  @@map("allowed_emails")
+}
+
+// ─── Users (auto-created on first Google login) ───────────────────────────────
+
+model User {
+  id        String   @id @default(cuid())
+  name      String?
+  email     String?  @unique
+  emailVerified DateTime?
+  image     String?
+  phone     String?
+  role      Role     @default(MEMBER)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  accounts Account[]
+  sessions Session[]
+  member   Member?
+
+  @@map("users")
+}
+
+enum Role {
+  ADMIN
+  MEMBER
+}
+
+// ─── Members (football player profile) ───────────────────────────────────────
+
+model Member {
+  id           String       @id @default(cuid())
+  userId       String       @unique
+  code         String       @unique // Ví dụ: "NVA" - dùng trong nội dung CK
+  jerseyNumber Int?
+  position     Position?
+  joinDate     DateTime     @default(now())
+  status       MemberStatus @default(ACTIVE)
+  note         String?      @db.Text
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  user            User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  attendances     MatchAttendance[]
+  paymentRecords  PaymentRecord[]
+
+  @@map("members")
+}
+
+enum MemberStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+}
+
+enum Position {
+  GOALKEEPER
+  DEFENDER
+  MIDFIELDER
+  FORWARD
+}
+
+// ─── Match Sessions ───────────────────────────────────────────────────────────
+
+model MatchSession {
+  id           String      @id @default(cuid())
+  code         String      @unique // "TS082026" - dùng trong nội dung CK
+  title        String
+  matchDate    DateTime
+  location     String?
+  matchType    MatchType   @default(INTERNAL)
+  opponentName String?     // null nếu nội bộ
+  teamAName    String?     @default("Đội A")
+  teamBName    String?     @default("Đội B")
+  result       MatchResult?
+  // Phí theo kết quả
+  feeTotal       Float?
+  feeWinner      Float?      // Phí đội thắng
+  feeLose      Float?      // Phí đội thua
+  feeDraw      Float?      // Phí hòa
+  feeDefault   Float?      // Phí mặc định (nội bộ không chia đội)
+  drinksFeeTotal Float?    // Tổng tiền nước của trận
+  status       MatchStatus @default(UPCOMING)
+  note         String?     @db.Text
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  attendances     MatchAttendance[]
+  paymentSessions PaymentSession[]
+
+  @@map("match_sessions")
+}
+
+enum MatchType {
+  INTERNAL   // Nội bộ
+  EXTERNAL   // Giao hữu / có đối thủ
+}
+
+enum MatchResult {
+  WIN
+  LOSE
+  DRAW
+}
+
+enum MatchStatus {
+  UPCOMING
+  DONE
+  CANCELLED
+}
+
+// ─── Match Attendances ────────────────────────────────────────────────────────
+
+model MatchAttendance {
+  id                     String         @id @default(cuid())
+  matchId                String
+  memberId               String
+  status                 AttendStatus   @default(ATTENDED)
+  teamSide               TeamSide?      // Đội A hay Đội B (chỉ dùng cho INTERNAL)
+  guestCount             Int            @default(0)
+  drinksGuestCount       Int            @default(0)
+  matchResultForMember   MatchResult?   // Kết quả của thành viên này (tính sau khi có kết quả)
+  feeAssigned            Float?         // Số tiền cụ thể áp dụng cho thành viên này (tiền sân)
+  isDrinks               Boolean        @default(false) // Có tham gia uống nước không
+  drinksFeeAssigned      Float?         // Tiền nước phải chia
+  note                   String?
+  createdAt              DateTime       @default(now())
+  updatedAt              DateTime       @updatedAt
+
+  match  MatchSession @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  member Member       @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  @@unique([matchId, memberId])
+  @@map("match_attendances")
+}
+
+enum AttendStatus {
+  ATTENDED
+  ABSENT
+  LATE
+  EXCUSED
+}
+
+enum TeamSide {
+  TEAM_A
+  TEAM_B
+}
+
+// ─── Payment Sessions ─────────────────────────────────────────────────────────
+
+model PaymentSession {
+  id            String         @id @default(cuid())
+  code          String         @unique // "TS082026" - khớp với match code để auto-match
+  title         String
+  description   String?        @db.Text
+  type          PaymentType    @default(MATCH_FEE)
+  matchId       String?
+  amountDefault Float?
+  dueDate       DateTime?
+  status        PaymentStatus  @default(OPEN)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  match          MatchSession?   @relation(fields: [matchId], references: [id])
+  paymentRecords PaymentRecord[]
+
+  @@map("payment_sessions")
+}
+
+enum PaymentType {
+  MATCH_FEE     // Tiền sân theo trận
+  MONTHLY_FUND  // Quỹ hàng tháng
+  CUSTOM        // Tùy chỉnh
+}
+
+enum PaymentStatus {
+  OPEN
+  CLOSED
+}
+
+// ─── Payment Records (per member per session) ─────────────────────────────────
+
+model PaymentRecord {
+  id              String        @id @default(cuid())
+  sessionId       String
+  memberId        String
+  amountRequired  Float         @default(0) // Số tiền cần đóng
+  amountPaid      Float         @default(0) // Số tiền đã đóng
+  status          RecordStatus  @default(PENDING)
+  paidAt          DateTime?
+  paymentMethod   PayMethod?
+  sepayTxId       String?       @unique // FK tới SepayTransaction
+  note            String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  session        PaymentSession   @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  member         Member           @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  sepayTx        SepayTransaction? @relation(fields: [sepayTxId], references: [sepayId])
+
+  @@unique([sessionId, memberId])
+  @@map("payment_records")
+}
+
+enum RecordStatus {
+  PENDING
+  PAID
+  OVERDUE
+  WAIVED
+}
+
+enum PayMethod {
+  CASH
+  BANK_TRANSFER
+}
+
+// ─── SePay Transactions (raw webhook data) ────────────────────────────────────
+
+model SepayTransaction {
+  id              String   @id @default(cuid())
+  sepayId         String   @unique // ID giao dịch từ SePay (chống trùng lặp)
+  gateway         String   // Tên ngân hàng
+  accountNumber   String?
+  transferAmount  Float
+  content         String?  @db.Text
+  referenceCode   String?
+  transactionDate DateTime
+  isMatched       Boolean  @default(false)
+  matchedMemberId String?
+  matchedMemberCode String?
+  matchedSessionCode String?
+  rawPayload      Json     // Lưu toàn bộ payload gốc từ SePay
+  createdAt       DateTime @default(now())
+
+  paymentRecord PaymentRecord?
+
+  @@map("sepay_transactions")
+}
