@@ -47,9 +47,14 @@ export default async function MatchesPage({ searchParams }: { searchParams: Prom
     });
   } else {
     // Fetch all for list view (or maybe paginate later)
-    matches = await prisma.matchSession.findMany({
+    const rawMatches = await prisma.matchSession.findMany({
       include: { _count: { select: { attendances: true } } },
       orderBy: { matchDate: "desc" },
+    });
+    matches = rawMatches.sort((a, b) => {
+      if (a.status === "UPCOMING" && b.status !== "UPCOMING") return -1;
+      if (a.status !== "UPCOMING" && b.status === "UPCOMING") return 1;
+      return new Date(b.matchDate).getTime() - new Date(a.matchDate).getTime();
     });
   }
 

@@ -10,12 +10,18 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const status = searchParams.get("status") as MatchStatus | null;
 
-  const matches = await prisma.matchSession.findMany({
+  const rawMatches = await prisma.matchSession.findMany({
     where: { ...(status ? { status } : {}) },
     include: {
       _count: { select: { attendances: true } },
     },
     orderBy: { matchDate: "desc" },
+  });
+
+  const matches = rawMatches.sort((a, b) => {
+    if (a.status === "UPCOMING" && b.status !== "UPCOMING") return -1;
+    if (a.status !== "UPCOMING" && b.status === "UPCOMING") return 1;
+    return new Date(b.matchDate).getTime() - new Date(a.matchDate).getTime();
   });
 
   return NextResponse.json({ data: matches });

@@ -55,9 +55,9 @@ export async function PUT(request: NextRequest, { params }: Params) {
 
   const { id } = await params;
   const body = await request.json();
-  const { result, status, title, location, note, feeWinner, feeLose, feeDraw, feeDefault, feeTotal, drinksFeeTotal } = body;
+  const { result, status, title, location, note, feeWinner, feeLose, feeDraw, feeDefault, feeTotal, drinksFeeTotal, feeSplitMethod } = body;
 
-  console.log("PUT Match Session Payload:", { id, result, status, feeTotal });
+  console.log("PUT Match Session Payload:", { id, result, status, feeTotal, feeSplitMethod });
 
   const match = await prisma.matchSession.findUnique({
     where: { id },
@@ -91,14 +91,7 @@ export async function PUT(request: NextRequest, { params }: Params) {
     (a) => a.status === AttendStatus.ATTENDED || a.status === AttendStatus.LATE
   );
 
-  // Calculate base fee if feeTotal is provided
-  let baseFeePerPerson = 0;
-  if (updated.feeTotal && updated.feeTotal > 0) {
-    const matchHeads = activeAttendances.reduce((acc, a) => acc + 1 + (a.guestCount || 0), 0);
-    if (matchHeads > 0) {
-      baseFeePerPerson = updated.feeTotal / matchHeads;
-    }
-  }
+  const totalHeads = activeAttendances.reduce((acc, a) => acc + 1 + (a.guestCount || 0), 0);
 
   // Calculate drinks fee per person
   let drinksFeePerPerson = 0;
@@ -110,7 +103,7 @@ export async function PUT(request: NextRequest, { params }: Params) {
     }
   }
 
-  // If result is set, update fee_assigned for each attended member
+  // Calculate base match fee per person
   if (match.attendances.length > 0) {
     await Promise.all(
       activeAttendances.map((attendance) => {
@@ -127,11 +120,53 @@ export async function PUT(request: NextRequest, { params }: Params) {
           memberResult = result as MatchResult | null;
         }
 
-        let fee = attendance.feeAssigned;
+        let fee = 0;
+        const userHeads = 1 + (attendance.guestCount || 0);
+
         if (result) {
           if (updated.feeTotal && updated.feeTotal > 0) {
-            fee = baseFeePerPerson * (1 + (attendance.guestCount || 0));
+            if (match.matchType === "INTERNAL") {
+              const method = feeSplitMethod || "EQUAL";
+              
+              if (result === MatchResult.DRAW || method === "EQUAL") {
+                fee = totalHeads > 0 ? (updated.feeTotal / totalHeads) * userHeads : 0;
+              } else {
+                const winningTeamSide = result === MatchResult.WIN ? TeamSide.TEAM_A : TeamSide.TEAM_B;
+                const winningHeads = activeAttendances
+                  .filter(a => a.teamSide === winningTeamSide)
+                  .reduce((acc, a) => acc + 1 + (a.guestCount || 0), 0);
+                const losingHeads = activeAttendances
+                  .filter(a => a.teamSide !== winningTeamSide)
+                  .reduce((acc, a) => acc + 1 + (a.guestCount || 0), 0);
+
+                const isWinner = attendance.teamSide === winningTeamSide;
+
+                if (method === "LOSER_100") {
+                  if (isWinner) {
+                    fee = 0;
+                  } else {
+                    fee = losingHeads > 0 ? (updated.feeTotal / losingHeads) * userHeads : 0;
+                  }
+                } else if (method === "LOSER_70_WINNER_30") {
+                  if (isWinner) {
+                    fee = winningHeads > 0 ? ((updated.feeTotal * 0.3) / winningHeads) * userHeads : 0;
+                  } else {
+                    fee = losingHeads > 0 ? ((updated.feeTotal * 0.7) / losingHeads) * userHeads : 0;
+                  }
+                } else if (method === "LOSER_60_WINNER_40") {
+                  if (isWinner) {
+                    fee = winningHeads > 0 ? ((updated.feeTotal * 0.4) / winningHeads) * userHeads : 0;
+                  } else {
+                    fee = losingHeads > 0 ? ((updated.feeTotal * 0.6) / losingHeads) * userHeads : 0;
+                  }
+                }
+              }
+            } else {
+              // Friendly match (EXTERNAL) - always split equally
+              fee = totalHeads > 0 ? (updated.feeTotal / totalHeads) * userHeads : 0;
+            }
           } else {
+            // Use feeDefault if no feeTotal
             const singleFee = calculateMemberFee(
               {
                 matchType: match.matchType,
@@ -142,7 +177,7 @@ export async function PUT(request: NextRequest, { params }: Params) {
               },
               memberResult
             );
-            fee = singleFee * (1 + (attendance.guestCount || 0));
+            fee = singleFee * userHeads;
           }
         }
 

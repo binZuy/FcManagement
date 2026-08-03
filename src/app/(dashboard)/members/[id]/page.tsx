@@ -47,7 +47,7 @@ export default async function MemberDetailPage({ params }: Params) {
   if (!member) notFound();
 
   // Tách biệt record chưa đóng và đã đóng
-  const unpaidRecords = member.paymentRecords.filter(r => ["PENDING", "PARTIAL", "OVERDUE"].includes(r.status));
+  const unpaidRecords = member.paymentRecords.filter(r => ["PENDING", "OVERDUE"].includes(r.status));
   const paidRecords = member.paymentRecords.filter(r => ["PAID", "WAIVED"].includes(r.status)).slice(0, 15); // Chỉ lấy 15 giao dịch gần nhất cho lịch sử
 
   const totalAttended = member.attendances.filter((a) => a.status === "ATTENDED").length;
@@ -56,7 +56,7 @@ export default async function MemberDetailPage({ params }: Params) {
     .filter((r) => r.status !== "WAIVED")
     .reduce((s, r) => s + r.amountRequired, 0);
   const totalPaidAmount = member.paymentRecords
-    .filter((r) => r.status === "PAID" || r.status === "PARTIAL")
+    .filter((r) => r.status === "PAID")
     .reduce((s, r) => s + r.amountPaid, 0);
   const currentDebt = Math.max(0, totalOwed - totalPaidAmount);
 

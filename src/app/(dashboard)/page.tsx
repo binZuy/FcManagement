@@ -217,7 +217,7 @@ export default async function DashboardPage() {
               return (
                 <Link
                   key={session.id}
-                  href={`/payments/${session.id}`}
+                  href={`/payments/session/${session.id}`}
                   style={{ textDecoration: "none" }}
                 >
                   <div

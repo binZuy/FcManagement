@@ -1,174 +1,231 @@
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
-import { formatCurrency, formatDateTime } from "@/lib/utils";
+import { formatCurrency, formatDate, formatDateTime } from "@/lib/utils";
 import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
 import { notFound } from "next/navigation";
+import { ArrowLeft, Mail, Phone, Hash, Calendar, AlertCircle, CheckCircle } from "lucide-react";
+import { MarkPaidButton } from "@/components/MarkPaidButton";
 import { RecordStatus } from "@prisma/client";
 
-const RECORD_STATUS: Record<string, { label: string; cls: string }> = {
-  PENDING: { label: "Chưa đóng", cls: "badge-pending" },
-  PAID: { label: "Đã đóng", cls: "badge-paid" },
-  OVERDUE: { label: "Quá hạn", cls: "badge-overdue" },
-  WAIVED: { label: "Miễn", cls: "badge-waived" },
+const RECORD_STATUS: Record<string, { label: string; cls: string; color: string }> = {
+  PENDING: { label: "Chưa đóng", cls: "badge-pending", color: "#facc15" },
+  PAID: { label: "Đã đóng", cls: "badge-paid", color: "#4ade80" },
+  OVERDUE: { label: "Quá hạn", cls: "badge-overdue", color: "#f87171" },
+  WAIVED: { label: "Miễn", cls: "badge-waived", color: "#94a3b8" },
 };
 
 type Params = { params: Promise<{ id: string }> };
 
-export default async function PaymentDetailPage({ params }: Params) {
+export default async function MemberPaymentDetailPage({ params }: Params) {
   const { id } = await params;
-  const session = await prisma.paymentSession.findUnique({
+  const session = await auth();
+  const isAdmin = session?.user?.role === "ADMIN";
+
+  const member = await prisma.member.findUnique({
     where: { id },
     include: {
-      match: true,
+      user: { select: { name: true, email: true, image: true, phone: true } },
       paymentRecords: {
-        include: {
-          member: { include: { user: { select: { name: true, email: true, image: true } } } },
-          sepayTx: true,
+        include: { 
+          session: {
+            include: { match: true }
+          },
+          sepayTx: true 
         },
-        orderBy: [{ status: "asc" }, { member: { user: { name: "asc" } } }],
+        orderBy: { createdAt: "desc" },
       },
     },
   });
 
-  if (!session) notFound();
+  if (!member) notFound();
 
-  const total = session.paymentRecords.reduce((s, r) => s + r.amountRequired, 0);
-  const paid = session.paymentRecords.filter((r) => r.status === RecordStatus.PAID).reduce((s, r) => s + r.amountPaid, 0);
-  const paidCount = session.paymentRecords.filter((r) => r.status === RecordStatus.PAID).length;
-  const pct = session.paymentRecords.length > 0 ? Math.round((paidCount / session.paymentRecords.length) * 100) : 0;
+  // Tách biệt record chưa đóng và đã đóng
+  const unpaidRecords = member.paymentRecords.filter(
+    (r) => r.status !== RecordStatus.PAID && r.status !== RecordStatus.WAIVED
+  );
+  const paidRecords = member.paymentRecords.filter(
+    (r) => r.status === RecordStatus.PAID || r.status === RecordStatus.WAIVED
+  ).slice(0, 20); // 20 giao dịch gần nhất làm lịch sử
+
+  const totalPaidCount = member.paymentRecords.filter((r) => r.status === RecordStatus.PAID).length;
+  const totalPaidAmount = member.paymentRecords
+    .filter((r) => r.status === RecordStatus.PAID)
+    .reduce((sum, r) => sum + r.amountPaid, 0);
+  const totalDebtAmount = unpaidRecords.reduce((sum, r) => sum + (r.amountRequired - r.amountPaid), 0);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "28px" }}>
+      {/* Back button */}
       <Link href="/payments" className="btn btn-secondary" style={{ alignSelf: "flex-start" }}>
         <ArrowLeft size={16} />
-        Quay lại
+        Quay lại danh sách
       </Link>
 
-      {/* Session header */}
+      {/* Member Profile Card */}
       <div className="glass-card" style={{ padding: "28px" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "16px", marginBottom: "24px" }}>
-          <div>
-            <h1 style={{ fontSize: "1.5rem", fontWeight: 800, color: "var(--card-foreground)", marginBottom: "6px" }}>
-              {session.title}
-            </h1>
-            <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
-              <span style={{
-                padding: "3px 10px", borderRadius: "999px", fontSize: "0.72rem", fontWeight: 600,
-                color: session.status === "OPEN" ? "#4ade80" : "#94a3b8",
-                background: session.status === "OPEN" ? "rgba(34,197,94,0.12)" : "rgba(148,163,184,0.12)",
-              }}>
-                {session.status === "OPEN" ? "Đang mở" : "Đã đóng"}
-              </span>
-              <span style={{ fontSize: "0.8rem", color: "var(--muted-foreground)" }}>
-                Mã: <strong style={{ color: "var(--primary)" }}>{session.code}</strong>
-              </span>
+        <div style={{ display: "flex", alignItems: "flex-start", gap: "24px", flexWrap: "wrap" }}>
+          {member.user.image ? (
+            <img
+              src={member.user.image}
+              alt={member.user.name ?? ""}
+              style={{ width: 72, height: 72, borderRadius: "50%", border: `3px solid ${totalDebtAmount > 0 ? "#fb923c" : "#4ade80"}`, objectFit: "cover" }}
+            />
+          ) : (
+            <div
+              style={{
+                width: 72,
+                height: 72,
+                borderRadius: "50%",
+                background: "var(--gradient-primary)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: "1.75rem",
+                fontWeight: 800,
+                color: "white",
+                flexShrink: 0,
+                border: `3px solid ${totalDebtAmount > 0 ? "#fb923c" : "#4ade80"}`
+              }}
+            >
+              {member.user.name?.[0]?.toUpperCase() ?? "?"}
             </div>
-          </div>
-          <div style={{ textAlign: "right" }}>
-            <div style={{ fontSize: "1.5rem", fontWeight: 800, color: "#4ade80" }}>
-              {formatCurrency(paid)}
+          )}
+          <div style={{ flex: 1 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap", marginBottom: "6px" }}>
+              <h1 style={{ fontSize: "1.35rem", fontWeight: 800, color: "var(--card-foreground)" }}>
+                {member.user.name}
+              </h1>
+              {member.jerseyNumber && (
+                <span style={{ padding: "2px 10px", background: "rgba(34,197,94,0.15)", color: "var(--primary)", borderRadius: "999px", fontSize: "0.8rem", fontWeight: 700 }}>
+                  #{member.jerseyNumber}
+                </span>
+              )}
             </div>
-            <div style={{ fontSize: "0.85rem", color: "var(--muted-foreground)" }}>
-              đã thu / {formatCurrency(total)}
+            <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px", color: "var(--muted-foreground)", fontSize: "0.82rem" }}>
+                <Mail size={13} />
+                {member.user.email}
+              </div>
+              {member.user.phone && (
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", color: "var(--muted-foreground)", fontSize: "0.82rem" }}>
+                  <Phone size={13} />
+                  {member.user.phone}
+                </div>
+              )}
+              <div style={{ display: "flex", alignItems: "center", gap: "8px", color: "var(--muted-foreground)", fontSize: "0.82rem" }}>
+                <Hash size={13} />
+                Cú pháp chuyển khoản: <strong style={{ color: "var(--primary)" }}>FCM {member.code}</strong>
+              </div>
             </div>
           </div>
         </div>
 
-        <div className="progress-bar" style={{ height: 10, marginBottom: 8 }}>
-          <div className="progress-fill" style={{ width: `${pct}%` }} />
-        </div>
-        <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.8rem", color: "var(--muted-foreground)" }}>
-          <span>{paidCount}/{session.paymentRecords.length} thành viên đã đóng</span>
-          <span style={{ color: pct === 100 ? "var(--primary)" : undefined }}>{pct}%</span>
-        </div>
-
-        {/* VietQR info box */}
-        <div
-          style={{
-            marginTop: "20px",
-            padding: "14px 18px",
-            borderRadius: "10px",
-            background: "rgba(34,197,94,0.06)",
-            border: "1px solid rgba(34,197,94,0.2)",
-          }}
-        >
-          <div style={{ fontSize: "0.8rem", color: "var(--primary)", fontWeight: 600, marginBottom: "4px" }}>
-            💡 Cú pháp chuyển khoản cho thành viên
-          </div>
-          <div style={{ fontFamily: "monospace", fontSize: "0.85rem", color: "var(--card-foreground)", letterSpacing: "0.05em" }}>
-            FCM [MÃ_THÀNH_VIÊN] {session.code}
-          </div>
-          <div style={{ fontSize: "0.75rem", color: "var(--muted-foreground)", marginTop: "4px" }}>
-            Ví dụ: <code style={{ color: "var(--primary)" }}>FCM NVA {session.code}</code> → Tự động xác nhận Nguyễn Văn A đã đóng tiền
-          </div>
+        {/* Member Payments Quick Stats */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: "12px", marginTop: "24px", paddingTop: "24px", borderTop: "1px solid var(--border)" }}>
+          {[
+            { label: "Tổng số phiên", value: member.paymentRecords.length },
+            { label: "Đã đóng hoàn thành", value: `${totalPaidCount} phiên` },
+            { label: "Tổng số tiền đã đóng", value: formatCurrency(totalPaidAmount) },
+            { label: "Nợ cần thu hiện tại", value: formatCurrency(totalDebtAmount), color: totalDebtAmount > 0 ? "#f87171" : "#4ade80" },
+          ].map((stat, i) => (
+            <div key={i} style={{ textAlign: "center" }}>
+              <div style={{ fontSize: "1.15rem", fontWeight: 800, color: stat.color ?? "var(--card-foreground)" }}>{stat.value}</div>
+              <div style={{ fontSize: "0.72rem", color: "var(--muted-foreground)", marginTop: "2px" }}>{stat.label}</div>
+            </div>
+          ))}
         </div>
       </div>
 
-      {/* Payment records table */}
-      <div className="glass-card" style={{ overflow: "hidden" }}>
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th>Thành viên</th>
-              <th>Số tiền</th>
-              <th>Trạng thái</th>
-              <th>Ngày đóng</th>
-              <th>Nguồn</th>
-            </tr>
-          </thead>
-          <tbody>
-            {session.paymentRecords.map((record) => {
-              const st = RECORD_STATUS[record.status] ?? RECORD_STATUS.PENDING;
+      {/* Grid details */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(400px, 1fr))", gap: "24px" }}>
+        
+        {/* Column 1: Unpaid list */}
+        <div className="glass-card" style={{ padding: "24px", border: totalDebtAmount > 0 ? "1px solid rgba(248,113,113,0.25)" : "1px solid var(--border)" }}>
+          <h2 style={{ fontSize: "1.05rem", fontWeight: 700, marginBottom: "16px", color: totalDebtAmount > 0 ? "#f87171" : "var(--card-foreground)", display: "flex", alignItems: "center", gap: "8px" }}>
+            <AlertCircle size={18} /> Các trận/khoản chưa đóng ({unpaidRecords.length})
+          </h2>
+          <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+            {unpaidRecords.length === 0 && (
+              <div style={{ textAlign: "center", padding: "36px 0", color: "#4ade80" }}>
+                <CheckCircle size={32} style={{ margin: "0 auto 12px", opacity: 0.8, display: "block" }} />
+                <span style={{ fontWeight: 600, fontSize: "0.9rem" }}>Thành viên này đã đóng đủ mọi khoản!</span>
+              </div>
+            )}
+            {unpaidRecords.map((r) => {
+              const cfg = RECORD_STATUS[r.status] ?? { label: r.status, color: "white" };
+              const outstanding = r.amountRequired - r.amountPaid;
               return (
-                <tr key={record.id}>
-                  <td>
-                    <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                      {record.member.user.image ? (
-                        <img src={record.member.user.image} alt="" style={{ width: 32, height: 32, borderRadius: "50%" }} />
-                      ) : (
-                        <div style={{ width: 32, height: 32, borderRadius: "50%", background: "var(--gradient-primary)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "13px", fontWeight: 700, color: "white" }}>
-                          {record.member.user.name?.[0]?.toUpperCase()}
-                        </div>
+                <div key={r.id} style={{ display: "flex", alignItems: "center", gap: "12px", padding: "12px", borderRadius: "10px", background: "rgba(239,68,68,0.04)", border: "1px solid rgba(239,68,68,0.08)" }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: "0.85rem", fontWeight: 700, color: "var(--card-foreground)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {r.session.title}
+                    </div>
+                    <div style={{ fontSize: "0.75rem", color: "var(--muted-foreground)", marginTop: "4px", display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                      <span style={{ color: cfg.color, fontWeight: 600 }}>{cfg.label}</span>
+                      <span>•</span>
+                      <span>Yêu cầu: {formatCurrency(r.amountRequired)}</span>
+                      {r.session.dueDate && (
+                        <>
+                          <span>•</span>
+                          <span>Hạn: {formatDate(r.session.dueDate)}</span>
+                        </>
                       )}
-                      <div>
-                        <div style={{ fontSize: "0.875rem", fontWeight: 600, color: "var(--card-foreground)" }}>{record.member.user.name}</div>
-                        <div style={{ fontSize: "0.7rem", color: "var(--muted-foreground)" }}>{record.member.user.email}</div>
-                      </div>
                     </div>
-                  </td>
-                  <td>
-                    <div style={{ fontWeight: 700, color: "var(--card-foreground)" }}>
-                      {formatCurrency(record.amountRequired)}
+                  </div>
+                  <div style={{ textAlign: "right", flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "6px" }}>
+                    <div style={{ fontSize: "0.9rem", fontWeight: 800, color: "#f87171" }}>
+                      {formatCurrency(outstanding)}
                     </div>
-                    {record.amountPaid > 0 && record.amountPaid !== record.amountRequired && (
-                      <div style={{ fontSize: "0.75rem", color: "#4ade80" }}>
-                        Đã đóng: {formatCurrency(record.amountPaid)}
-                      </div>
+                    {isAdmin && (
+                      <MarkPaidButton recordId={r.id} amountRequired={r.amountRequired} />
                     )}
-                  </td>
-                  <td>
-                    <span className={st.cls} style={{ padding: "4px 10px", borderRadius: "999px", fontSize: "0.75rem", fontWeight: 600 }}>
-                      {st.label}
-                    </span>
-                  </td>
-                  <td style={{ color: "var(--muted-foreground)", fontSize: "0.8rem" }}>
-                    {record.paidAt ? formatDateTime(record.paidAt) : "—"}
-                  </td>
-                  <td style={{ fontSize: "0.8rem", color: "var(--muted-foreground)" }}>
-                    {record.paymentMethod === "BANK_TRANSFER"
-                      ? record.sepayTx
-                        ? `🔗 SePay (${record.sepayTx.gateway})`
-                        : "💳 CK thủ công"
-                      : record.paymentMethod === "CASH"
-                      ? "💵 Tiền mặt"
-                      : "—"}
-                  </td>
-                </tr>
+                  </div>
+                </div>
               );
             })}
-          </tbody>
-        </table>
+          </div>
+        </div>
+
+        {/* Column 2: Paid History list */}
+        <div className="glass-card" style={{ padding: "24px" }}>
+          <h2 style={{ fontSize: "1.05rem", fontWeight: 700, marginBottom: "16px", color: "var(--card-foreground)", display: "flex", alignItems: "center", gap: "8px" }}>
+            <CheckCircle size={18} color="#4ade80" /> Lịch sử đã thanh toán (Gần nhất)
+          </h2>
+          <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+            {paidRecords.length === 0 && (
+              <p style={{ color: "var(--muted-foreground)", fontSize: "0.85rem", textAlign: "center", padding: "36px 0" }}>
+                Chưa có lịch sử thanh toán
+              </p>
+            )}
+            {paidRecords.map((r) => {
+              const cfg = RECORD_STATUS[r.status] ?? { label: r.status, cls: "" };
+              return (
+                <div key={r.id} style={{ display: "flex", alignItems: "center", gap: "10px", padding: "10px 12px", borderRadius: "8px", background: "rgba(30,41,59,0.3)" }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: "0.8rem", fontWeight: 600, color: "var(--card-foreground)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {r.session.title}
+                    </div>
+                    <div style={{ fontSize: "0.7rem", color: "var(--muted-foreground)", marginTop: "2px" }}>
+                      {r.paidAt ? formatDateTime(r.paidAt) : "Đã hoàn thành"}
+                      {r.paymentMethod && (
+                        <span> · {r.paymentMethod === "BANK_TRANSFER" ? "Chuyển khoản" : "Tiền mặt"}</span>
+                      )}
+                    </div>
+                  </div>
+                  <div style={{ textAlign: "right", flexShrink: 0 }}>
+                    <div style={{ fontSize: "0.82rem", fontWeight: 700, color: "#4ade80" }}>
+                      {formatCurrency(r.amountPaid)}
+                    </div>
+                    <span className={cfg.cls} style={{ display: "inline-block", marginTop: "3px", padding: "1px 6px", borderRadius: "999px", fontSize: "0.62rem", fontWeight: 600 }}>
+                      {cfg.label}
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
       </div>
     </div>
   );

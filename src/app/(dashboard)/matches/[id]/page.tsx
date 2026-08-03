@@ -111,7 +111,7 @@ export default async function MatchDetailPage({ params }: Params) {
             </div>
             <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
               {match.paymentSessions.map(ps => (
-                <Link key={ps.id} href={`/payments/${ps.id}`} className="btn btn-secondary" style={{ fontSize: "0.8rem", padding: "4px 12px" }}>
+                <Link key={ps.id} href={`/payments/session/${ps.id}`} className="btn btn-secondary" style={{ fontSize: "0.8rem", padding: "4px 12px" }}>
                   {ps.title}
                 </Link>
               ))}
