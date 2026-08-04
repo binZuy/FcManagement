@@ -100,6 +100,7 @@ model Member {
   user            User              @relation(fields: [userId], references: [id], onDelete: Cascade)
   attendances     MatchAttendance[]
   paymentRecords  PaymentRecord[]
+  paymentBundles  PaymentBundle[]
 
   @@map("members")
 }
@@ -250,9 +251,10 @@ model PaymentRecord {
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
 
-  session        PaymentSession   @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  member         Member           @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  session        PaymentSession    @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  member         Member            @relation(fields: [memberId], references: [id], onDelete: Cascade)
   sepayTx        SepayTransaction? @relation(fields: [sepayTxId], references: [sepayId])
+  bundleItem     PaymentBundleItem?
 
   @@unique([sessionId, memberId])
   @@map("payment_records")
@@ -273,22 +275,63 @@ enum PayMethod {
 // ─── SePay Transactions (raw webhook data) ────────────────────────────────────
 
 model SepayTransaction {
-  id              String   @id @default(cuid())
-  sepayId         String   @unique // ID giao dịch từ SePay (chống trùng lặp)
-  gateway         String   // Tên ngân hàng
-  accountNumber   String?
-  transferAmount  Float
-  content         String?  @db.Text
-  referenceCode   String?
-  transactionDate DateTime
-  isMatched       Boolean  @default(false)
-  matchedMemberId String?
-  matchedMemberCode String?
+  id                 String   @id @default(cuid())
+  sepayId            String   @unique // ID giao dịch từ SePay (chống trùng lặp)
+  gateway            String   // Tên ngân hàng
+  accountNumber      String?
+  transferAmount     Float
+  content            String?  @db.Text
+  referenceCode      String?
+  transactionDate    DateTime
+  isMatched          Boolean  @default(false)
+  matchedMemberId    String?
+  matchedMemberCode  String?
   matchedSessionCode String?
-  rawPayload      Json     // Lưu toàn bộ payload gốc từ SePay
-  createdAt       DateTime @default(now())
+  matchedBundleCode  String?  // Bundle code nếu match qua bundle
+  rawPayload         Json     // Lưu toàn bộ payload gốc từ SePay
+  createdAt          DateTime @default(now())
 
   paymentRecord PaymentRecord?
+  paymentBundle PaymentBundle?
 
   @@map("sepay_transactions")
+}
+
+// ─── Payment Bundles (gom nhiều khoản vào 1 lần QR) ──────────────────────────
+
+model PaymentBundle {
+  id          String       @id @default(cuid())
+  memberId    String
+  bundleCode  String       @unique // 6 ký tự random, dùng trong nội dung CK
+  totalAmount Float
+  status      BundleStatus @default(PENDING)
+  expiresAt   DateTime?    // Hết hạn sau 30 phút
+  paidAt      DateTime?
+  sepayTxId   String?      @unique
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  member   Member              @relation(fields: [memberId], references: [id])
+  items    PaymentBundleItem[]
+  sepayTx  SepayTransaction?   @relation(fields: [sepayTxId], references: [sepayId])
+
+  @@map("payment_bundles")
+}
+
+model PaymentBundleItem {
+  id       String @id @default(cuid())
+  bundleId String
+  recordId String @unique // 1 record chỉ nằm trong 1 bundle tại một thời điểm
+
+  bundle PaymentBundle @relation(fields: [bundleId], references: [id], onDelete: Cascade)
+  record PaymentRecord @relation(fields: [recordId], references: [id])
+
+  @@map("payment_bundle_items")
+}
+
+enum BundleStatus {
+  PENDING    // Đang chờ thanh toán
+  PAID       // Đã thanh toán
+  EXPIRED    // Hết hạn
+  CANCELLED  // Đã huỷ
 }
