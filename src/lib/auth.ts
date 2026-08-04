@@ -16,7 +16,12 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     async signIn({ user }) {
       if (!user.email) return false;
 
-      // 1. Kiểm tra email trong whitelist
+      // 1. Nếu là ADMIN_EMAIL thì luôn luôn được phép đăng nhập (không cần seed trước)
+      if (process.env.ADMIN_EMAIL && user.email === process.env.ADMIN_EMAIL) {
+        return true;
+      }
+
+      // 2. Kiểm tra email trong whitelist đối với các thành viên khác
       const allowed = await prisma.allowedEmail.findUnique({
         where: { email: user.email },
       });
