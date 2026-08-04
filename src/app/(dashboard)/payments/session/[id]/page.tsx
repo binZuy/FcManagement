@@ -2,15 +2,15 @@ import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 import { formatCurrency, formatDateTime } from "@/lib/utils";
 import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Users, UserCheck } from "lucide-react";
 import { notFound } from "next/navigation";
 import { RecordStatus } from "@prisma/client";
 
-const RECORD_STATUS: Record<string, { label: string; cls: string }> = {
-  PENDING: { label: "Chưa đóng", cls: "badge-pending" },
-  PAID: { label: "Đã đóng", cls: "badge-paid" },
-  OVERDUE: { label: "Quá hạn", cls: "badge-overdue" },
-  WAIVED: { label: "Miễn", cls: "badge-waived" },
+const RECORD_STATUS: Record<string, { label: string; cls: string; color: string; bg: string }> = {
+  PENDING: { label: "Chưa đóng", cls: "badge-pending", color: "#facc15", bg: "rgba(250,204,21,0.12)" },
+  PAID: { label: "Đã đóng", cls: "badge-paid", color: "#4ade80", bg: "rgba(34,197,94,0.12)" },
+  OVERDUE: { label: "Quá hạn", cls: "badge-overdue", color: "#f87171", bg: "rgba(239,68,68,0.12)" },
+  WAIVED: { label: "Miễn đóng", cls: "badge-waived", color: "#94a3b8", bg: "rgba(148,163,184,0.12)" },
 };
 
 type Params = { params: Promise<{ id: string }> };
@@ -20,155 +20,286 @@ export default async function PaymentDetailPage({ params }: Params) {
   const session = await prisma.paymentSession.findUnique({
     where: { id },
     include: {
-      match: true,
+      match: {
+        include: {
+          attendances: true,
+        },
+      },
       paymentRecords: {
         include: {
           member: { include: { user: { select: { name: true, email: true, image: true } } } },
           sepayTx: true,
         },
-        orderBy: [{ status: "asc" }, { member: { user: { name: "asc" } } }],
+        orderBy: [{ status: "asc" }, { note: "desc" }, { member: { user: { name: "asc" } } }],
       },
     },
   });
 
   if (!session) notFound();
 
-  const total = session.paymentRecords.reduce((s, r) => s + r.amountRequired, 0);
-  const paid = session.paymentRecords.filter((r) => r.status === RecordStatus.PAID).reduce((s, r) => s + r.amountPaid, 0);
-  const paidCount = session.paymentRecords.filter((r) => r.status === RecordStatus.PAID).length;
-  const pct = session.paymentRecords.length > 0 ? Math.round((paidCount / session.paymentRecords.length) * 100) : 0;
+  // BÓC TÁCH DÒNG THÀNH VIÊN VÀ DÒNG BẠN NẾU CÓ
+  const displayItems: any[] = [];
+
+  session.paymentRecords.forEach((record) => {
+    const att = session.match?.attendances.find((a) => a.memberId === record.memberId);
+    const guestCount = att?.guestCount || 0;
+    const drinksGuestCount = att?.drinksGuestCount || 0;
+    const hasGuests = guestCount > 0 || drinksGuestCount > 0;
+
+    if (!hasGuests) {
+      // Không có bạn → hiện 1 dòng bình thường
+      displayItems.push({
+        id: record.id,
+        name: record.member.user.name,
+        isGuest: false,
+        guestNote: null,
+        code: record.member.code,
+        image: record.member.user.image,
+        amountRequired: record.amountRequired,
+        amountPaid: record.amountPaid,
+        status: record.status,
+        paidAt: record.paidAt,
+        paymentMethod: record.paymentMethod,
+        sepayTx: record.sepayTx,
+      });
+    } else {
+      // Có bạn đi cùng → bóc tách thành 2 dòng
+      const totalHeads = 1 + guestCount;
+      const drinkHeads = (att?.isDrinks ? 1 : 0) + drinksGuestCount;
+      const baseFeePerHead = (att?.feeAssigned ?? 0) / (totalHeads || 1);
+      const drinksFeePerHead = drinkHeads > 0 ? (att?.drinksFeeAssigned ?? 0) / (drinkHeads || 1) : 0;
+
+      const memberSelfFee = Math.round(baseFeePerHead + (att?.isDrinks ? drinksFeePerHead : 0));
+      const guestTotalFee = Math.round(guestCount * baseFeePerHead + drinksGuestCount * drinksFeePerHead);
+
+      // Dòng 1: Bản thân thành viên
+      displayItems.push({
+        id: record.id + "_self",
+        name: record.member.user.name,
+        isGuest: false,
+        guestNote: null,
+        code: record.member.code,
+        image: record.member.user.image,
+        amountRequired: memberSelfFee,
+        amountPaid: record.status === "PAID" ? memberSelfFee : 0,
+        status: memberSelfFee === 0 ? "WAIVED" : record.status,
+        paidAt: record.paidAt,
+        paymentMethod: record.paymentMethod,
+        sepayTx: record.sepayTx,
+      });
+
+      // Dòng 2: Bạn đi cùng
+      if (guestTotalFee > 0) {
+        displayItems.push({
+          id: record.id + "_guest",
+          name: `Bạn của ${record.member.user.name}`,
+          isGuest: true,
+          guestNote: `${guestCount} người`,
+          code: record.member.code,
+          image: null,
+          amountRequired: guestTotalFee,
+          amountPaid: record.status === "PAID" ? guestTotalFee : 0,
+          status: record.status,
+          paidAt: record.paidAt,
+          paymentMethod: record.paymentMethod,
+          sepayTx: record.sepayTx,
+        });
+      }
+    }
+  });
+
+  const total = displayItems.reduce((s, r) => s + r.amountRequired, 0);
+  const paid = displayItems.filter((r) => r.status === RecordStatus.PAID).reduce((s, r) => s + r.amountPaid, 0);
+  const paidCount = displayItems.filter((r) => r.status === RecordStatus.PAID).length;
+  const pct = displayItems.length > 0 ? Math.round((paidCount / displayItems.length) * 100) : 0;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "28px" }}>
-      <Link href="/payments" className="btn btn-secondary" style={{ alignSelf: "flex-start" }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
+      <Link href="/payments" className="btn btn-secondary" style={{ alignSelf: "flex-start", padding: "6px 12px", fontSize: "0.82rem" }}>
         <ArrowLeft size={16} />
-        Quay lại
+        Quay lại danh sách
       </Link>
 
-      {/* Session header */}
-      <div className="glass-card" style={{ padding: "28px" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "16px", marginBottom: "24px" }}>
+      {/* Session Header Card */}
+      <div className="glass-card" style={{ padding: "20px 24px" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "14px", marginBottom: "16px" }}>
           <div>
-            <h1 style={{ fontSize: "1.5rem", fontWeight: 800, color: "var(--card-foreground)", marginBottom: "6px" }}>
+            <h1 style={{ fontSize: "1.3rem", fontWeight: 800, color: "var(--card-foreground)", marginBottom: "6px" }}>
               {session.title}
             </h1>
-            <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+            <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", alignItems: "center" }}>
               <span style={{
-                padding: "3px 10px", borderRadius: "999px", fontSize: "0.72rem", fontWeight: 600,
+                padding: "3px 10px", borderRadius: "999px", fontSize: "0.72rem", fontWeight: 700,
                 color: session.status === "OPEN" ? "#4ade80" : "#94a3b8",
                 background: session.status === "OPEN" ? "rgba(34,197,94,0.12)" : "rgba(148,163,184,0.12)",
               }}>
                 {session.status === "OPEN" ? "Đang mở" : "Đã đóng"}
               </span>
               <span style={{ fontSize: "0.8rem", color: "var(--muted-foreground)" }}>
-                Mã: <strong style={{ color: "var(--primary)" }}>{session.code}</strong>
+                Mã phiên: <strong style={{ color: "var(--primary)" }}>{session.code}</strong>
               </span>
             </div>
           </div>
-          <div style={{ textAlign: "right" }}>
-            <div style={{ fontSize: "1.5rem", fontWeight: 800, color: "#4ade80" }}>
-              {formatCurrency(paid)}
+
+          {/* Stat Badge Box */}
+          <div
+            style={{
+              padding: "10px 16px",
+              borderRadius: "12px",
+              background: "rgba(34,197,94,0.08)",
+              border: "1px solid rgba(34,197,94,0.2)",
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "flex-start",
+              gap: "2px",
+            }}
+          >
+            <div style={{ fontSize: "0.75rem", color: "var(--muted-foreground)", fontWeight: 600 }}>
+              Đã thu / Tổng cần thu:
             </div>
-            <div style={{ fontSize: "0.85rem", color: "var(--muted-foreground)" }}>
-              đã thu / {formatCurrency(total)}
+            <div style={{ fontSize: "1.15rem", fontWeight: 800, color: "#4ade80", whiteSpace: "nowrap" }}>
+              {formatCurrency(paid)} <span style={{ fontSize: "0.85rem", color: "var(--muted-foreground)", fontWeight: 500 }}>/ {formatCurrency(total)}</span>
             </div>
           </div>
         </div>
 
-        <div className="progress-bar" style={{ height: 10, marginBottom: 8 }}>
+        <div className="progress-bar" style={{ height: 8, marginBottom: 8 }}>
           <div className="progress-fill" style={{ width: `${pct}%` }} />
         </div>
-        <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.8rem", color: "var(--muted-foreground)" }}>
-          <span>{paidCount}/{session.paymentRecords.length} thành viên đã đóng</span>
-          <span style={{ color: pct === 100 ? "var(--primary)" : undefined }}>{pct}%</span>
-        </div>
 
-        {/* VietQR info box */}
-        <div
-          style={{
-            marginTop: "20px",
-            padding: "14px 18px",
-            borderRadius: "10px",
-            background: "rgba(34,197,94,0.06)",
-            border: "1px solid rgba(34,197,94,0.2)",
-          }}
-        >
-          <div style={{ fontSize: "0.8rem", color: "var(--primary)", fontWeight: 600, marginBottom: "4px" }}>
-            💡 Cú pháp chuyển khoản cho thành viên
-          </div>
-          <div style={{ fontFamily: "monospace", fontSize: "0.85rem", color: "var(--card-foreground)", letterSpacing: "0.05em" }}>
-            FCM [MÃ_THÀNH_VIÊN] {session.code}
-          </div>
-          <div style={{ fontSize: "0.75rem", color: "var(--muted-foreground)", marginTop: "4px" }}>
-            Ví dụ: <code style={{ color: "var(--primary)" }}>FCM NVA {session.code}</code> → Tự động xác nhận Nguyễn Văn A đã đóng tiền
-          </div>
+        <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.78rem", color: "var(--muted-foreground)" }}>
+          <span>{paidCount}/{displayItems.length} lượt khoản đóng đã hoàn tất</span>
+          <span style={{ color: pct === 100 ? "var(--primary)" : undefined, fontWeight: 700 }}>{pct}%</span>
         </div>
       </div>
 
-      {/* Payment records table */}
-      <div className="glass-card" style={{ overflow: "hidden" }}>
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th>Thành viên</th>
-              <th>Số tiền</th>
-              <th>Trạng thái</th>
-              <th>Ngày đóng</th>
-              <th>Nguồn</th>
-            </tr>
-          </thead>
-          <tbody>
-            {session.paymentRecords.map((record) => {
-              const st = RECORD_STATUS[record.status] ?? RECORD_STATUS.PENDING;
-              return (
-                <tr key={record.id}>
-                  <td>
-                    <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                      {record.member.user.image ? (
-                        <img src={record.member.user.image} alt="" style={{ width: 32, height: 32, borderRadius: "50%" }} />
-                      ) : (
-                        <div style={{ width: 32, height: 32, borderRadius: "50%", background: "var(--gradient-primary)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "13px", fontWeight: 700, color: "white" }}>
-                          {record.member.user.name?.[0]?.toUpperCase()}
+      {/* Payment Records Table & Mobile Cards */}
+      <div className="glass-card" style={{ padding: "20px" }}>
+        <h2 style={{ fontSize: "1.05rem", fontWeight: 700, marginBottom: "16px", color: "var(--card-foreground)" }}>
+          Danh sách khoản đóng ({displayItems.length} khoản bao gồm bạn đi cùng)
+        </h2>
+
+        {/* 💻 DESKTOP TABLE */}
+        <div className="desktop-only-table">
+          <table className="data-table" style={{ width: "100%" }}>
+            <thead>
+              <tr>
+                <th>Thành viên / Đối tượng</th>
+                <th>Số tiền</th>
+                <th>Trạng thái</th>
+                <th>Ngày đóng</th>
+                <th>Hình thức</th>
+              </tr>
+            </thead>
+            <tbody>
+              {displayItems.map((record) => {
+                const st = RECORD_STATUS[record.status] ?? RECORD_STATUS.PENDING;
+
+                return (
+                  <tr key={record.id}>
+                    <td>
+                      <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                        {record.image ? (
+                          <img src={record.image} alt="" style={{ width: 34, height: 34, borderRadius: "50%" }} />
+                        ) : (
+                          <div style={{ width: 34, height: 34, borderRadius: "50%", background: record.isGuest ? "#fb923c" : "var(--gradient-primary)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "13px", fontWeight: 700, color: "white" }}>
+                            {record.isGuest ? "👥" : record.name?.[0]?.toUpperCase()}
+                          </div>
+                        )}
+                        <div>
+                          <div style={{ fontSize: "0.88rem", fontWeight: 700, color: record.isGuest ? "#fb923c" : "var(--card-foreground)" }}>
+                            {record.name}
+                          </div>
+                          <div style={{ fontSize: "0.72rem", color: "var(--muted-foreground)" }}>
+                            {record.isGuest ? record.guestNote : `Mã: ${record.code}`}
+                          </div>
+                        </div>
+                      </div>
+                    </td>
+                    <td>
+                      <div style={{ fontWeight: 800, color: "var(--card-foreground)", fontSize: "0.9rem" }}>
+                        {formatCurrency(record.amountRequired)}
+                      </div>
+                      {record.amountPaid > 0 && record.amountPaid !== record.amountRequired && (
+                        <div style={{ fontSize: "0.72rem", color: "#4ade80" }}>
+                          Đã đóng: {formatCurrency(record.amountPaid)}
                         </div>
                       )}
-                      <div>
-                        <div style={{ fontSize: "0.875rem", fontWeight: 600, color: "var(--card-foreground)" }}>{record.member.user.name}</div>
-                        <div style={{ fontSize: "0.7rem", color: "var(--muted-foreground)" }}>{record.member.user.email}</div>
-                      </div>
+                    </td>
+                    <td>
+                      <span style={{ padding: "3px 10px", borderRadius: "999px", fontSize: "0.72rem", fontWeight: 700, color: st.color, background: st.bg }}>
+                        {st.label}
+                      </span>
+                    </td>
+                    <td style={{ color: "var(--muted-foreground)", fontSize: "0.8rem" }}>
+                      {record.paidAt ? formatDateTime(record.paidAt) : "—"}
+                    </td>
+                    <td style={{ fontSize: "0.8rem", color: "var(--muted-foreground)" }}>
+                      {record.paymentMethod === "BANK_TRANSFER"
+                        ? record.sepayTx
+                          ? `🔗 SePay (${record.sepayTx.gateway})`
+                          : "💳 Chuyển khoản"
+                        : record.paymentMethod === "CASH"
+                        ? "💵 Tiền mặt"
+                        : "—"}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+
+        {/* 📱 MOBILE COMPACT CARDS */}
+        <div className="mobile-only-cards" style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+          {displayItems.map((record) => {
+            const st = RECORD_STATUS[record.status] ?? RECORD_STATUS.PENDING;
+
+            return (
+              <div
+                key={record.id}
+                style={{
+                  padding: "12px 14px",
+                  borderRadius: "10px",
+                  background: "rgba(30,41,59,0.3)",
+                  border: record.isGuest ? "1px solid rgba(251,146,60,0.3)" : "1px solid var(--border)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: "10px",
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: "10px", flex: 1, minWidth: 0 }}>
+                  {record.image ? (
+                    <img src={record.image} alt="" style={{ width: 36, height: 36, borderRadius: "50%", flexShrink: 0 }} />
+                  ) : (
+                    <div style={{ width: 36, height: 36, borderRadius: "50%", background: record.isGuest ? "#fb923c" : "var(--gradient-primary)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "14px", fontWeight: 800, color: "white", flexShrink: 0 }}>
+                      {record.isGuest ? "👥" : record.name?.[0]?.toUpperCase()}
                     </div>
-                  </td>
-                  <td>
-                    <div style={{ fontWeight: 700, color: "var(--card-foreground)" }}>
-                      {formatCurrency(record.amountRequired)}
+                  )}
+
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontWeight: 700, fontSize: "0.88rem", color: record.isGuest ? "#fb923c" : "var(--card-foreground)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {record.name}
                     </div>
-                    {record.amountPaid > 0 && record.amountPaid !== record.amountRequired && (
-                      <div style={{ fontSize: "0.75rem", color: "#4ade80" }}>
-                        Đã đóng: {formatCurrency(record.amountPaid)}
-                      </div>
-                    )}
-                  </td>
-                  <td>
-                    <span className={st.cls} style={{ padding: "4px 10px", borderRadius: "999px", fontSize: "0.75rem", fontWeight: 600 }}>
-                      {st.label}
-                    </span>
-                  </td>
-                  <td style={{ color: "var(--muted-foreground)", fontSize: "0.8rem" }}>
-                    {record.paidAt ? formatDateTime(record.paidAt) : "—"}
-                  </td>
-                  <td style={{ fontSize: "0.8rem", color: "var(--muted-foreground)" }}>
-                    {record.paymentMethod === "BANK_TRANSFER"
-                      ? record.sepayTx
-                        ? `🔗 SePay (${record.sepayTx.gateway})`
-                        : "💳 CK thủ công"
-                      : record.paymentMethod === "CASH"
-                      ? "💵 Tiền mặt"
-                      : "—"}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+                    <div style={{ fontSize: "0.72rem", color: record.isGuest ? "#fb923c" : "var(--muted-foreground)", fontWeight: record.isGuest ? 600 : 400 }}>
+                      {record.isGuest ? record.guestNote : `Mã: ${record.code}`}
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ textAlign: "right", flexShrink: 0 }}>
+                  <div style={{ fontWeight: 800, fontSize: "0.9rem", color: "var(--card-foreground)" }}>
+                    {formatCurrency(record.amountRequired)}
+                  </div>
+                  <span style={{ display: "inline-block", marginTop: "3px", padding: "2px 8px", borderRadius: "999px", fontSize: "0.68rem", fontWeight: 700, color: st.color, background: st.bg }}>
+                    {st.label}
+                  </span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
       </div>
     </div>
   );

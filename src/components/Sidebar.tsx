@@ -8,21 +8,18 @@ import {
   CalendarDays,
   Wallet,
   ArrowLeftRight,
-  Settings,
   ShieldCheck,
   LogOut,
-  Menu,
   X,
 } from "lucide-react";
 import { signOut } from "next-auth/react";
-import { useState } from "react";
 
 const navItems = [
   { href: "/", icon: LayoutDashboard, label: "Dashboard" },
   { href: "/members", icon: Users, label: "Thành viên" },
   { href: "/matches", icon: CalendarDays, label: "Trận bóng" },
   { href: "/payments", icon: Wallet, label: "Thu tiền" },
-  { href: "/transactions", icon: ArrowLeftRight, label: "Lịch sử giao dịch" },
+  { href: "/transactions", icon: ArrowLeftRight, label: "Lịch sử" },
 ];
 
 const adminItems = [
@@ -34,108 +31,152 @@ interface SidebarProps {
   userName?: string | null;
   userImage?: string | null;
   userEmail?: string | null;
+  isCollapsed: boolean;
+  mobileOpen: boolean;
+  onCloseMobile: () => void;
 }
 
-export function Sidebar({ userRole, userName, userImage, userEmail }: SidebarProps) {
+export function Sidebar({
+  userRole,
+  userName,
+  userImage,
+  userEmail,
+  isCollapsed,
+  mobileOpen,
+  onCloseMobile,
+}: SidebarProps) {
   const pathname = usePathname();
-  const [mobileOpen, setMobileOpen] = useState(false);
 
   const isActive = (href: string) =>
     href === "/" ? pathname === "/" : pathname.startsWith(href);
 
-  const SidebarContent = () => (
+  const SidebarContent = ({ collapsed = false }: { collapsed?: boolean }) => (
     <div
       style={{
         display: "flex",
         flexDirection: "column",
         height: "100%",
-        padding: "16px",
+        padding: collapsed ? "16px 8px" : "16px",
       }}
     >
-      {/* Logo */}
+      {/* Logo — Link trực tiếp về Trang chủ (Home) */}
       <div
         style={{
           display: "flex",
           alignItems: "center",
-          gap: "12px",
-          padding: "8px 8px 24px",
+          justifyContent: "space-between",
+          padding: collapsed ? "8px 4px 20px" : "8px 8px 20px",
           borderBottom: "1px solid var(--border)",
-          marginBottom: "8px",
+          marginBottom: "12px",
         }}
       >
-        <div
+        <Link
+          href="/"
           style={{
-            width: "40px",
-            height: "40px",
-            borderRadius: "12px",
-            background: "var(--gradient-primary)",
             display: "flex",
             alignItems: "center",
-            justifyContent: "center",
-            fontSize: "20px",
-            flexShrink: 0,
+            gap: "12px",
+            textDecoration: "none",
+            justifyContent: collapsed ? "center" : "flex-start",
+            width: "100%",
           }}
+          title="Về trang chủ Dashboard"
         >
-          ⚽
-        </div>
-        <div>
-          <div style={{ fontWeight: 700, fontSize: "1rem", color: "var(--card-foreground)" }}>
-            FC Manager
+          <div
+            style={{
+              width: "38px",
+              height: "38px",
+              borderRadius: "10px",
+              background: "var(--gradient-primary)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontSize: "18px",
+              flexShrink: 0,
+              boxShadow: "0 4px 12px rgba(34,197,94,0.3)",
+            }}
+          >
+            ⚽
           </div>
-          <div style={{ fontSize: "0.7rem", color: "var(--muted-foreground)" }}>
-            Quản lý Đội Bóng
-          </div>
-        </div>
+          {!collapsed && (
+            <div>
+              <div style={{ fontWeight: 800, fontSize: "1.05rem", color: "var(--card-foreground)", lineHeight: 1.2 }}>
+                FC Manager
+              </div>
+              <div style={{ fontSize: "0.72rem", color: "var(--primary)", fontWeight: 600, marginTop: "2px" }}>
+                Quản lý Đội Bóng
+              </div>
+            </div>
+          )}
+        </Link>
       </div>
 
-      {/* Nav */}
-      <nav style={{ flex: 1, display: "flex", flexDirection: "column", gap: "2px" }}>
-        {navItems.map(({ href, icon: Icon, label }) => (
-          <Link
-            key={href}
-            href={href}
-            className={`nav-item ${isActive(href) ? "active" : ""}`}
-            onClick={() => setMobileOpen(false)}
-          >
-            <Icon size={18} />
-            {label}
-          </Link>
-        ))}
+      {/* Nav links */}
+      <nav style={{ flex: 1, display: "flex", flexDirection: "column", gap: "4px" }}>
+        {navItems.map(({ href, icon: Icon, label }) => {
+          const active = isActive(href);
+          return (
+            <Link
+              key={href}
+              href={href}
+              className={`nav-item ${active ? "active" : ""}`}
+              style={{
+                justifyContent: collapsed ? "center" : "flex-start",
+                padding: collapsed ? "12px" : "10px 14px",
+              }}
+              onClick={onCloseMobile}
+              title={collapsed ? label : undefined}
+            >
+              <Icon size={20} style={{ flexShrink: 0 }} />
+              {!collapsed && <span>{label}</span>}
+            </Link>
+          );
+        })}
 
         {userRole === "ADMIN" && (
           <>
-            <div
-              style={{
-                fontSize: "0.7rem",
-                fontWeight: 600,
-                color: "var(--muted-foreground)",
-                textTransform: "uppercase",
-                letterSpacing: "0.08em",
-                padding: "16px 14px 4px",
-              }}
-            >
-              Admin
-            </div>
-            {adminItems.map(({ href, icon: Icon, label }) => (
-              <Link
-                key={href}
-                href={href}
-                className={`nav-item ${isActive(href) ? "active" : ""}`}
-                onClick={() => setMobileOpen(false)}
+            {!collapsed && (
+              <div
+                style={{
+                  fontSize: "0.68rem",
+                  fontWeight: 700,
+                  color: "var(--muted-foreground)",
+                  textTransform: "uppercase",
+                  letterSpacing: "0.08em",
+                  padding: "16px 14px 4px",
+                }}
               >
-                <Icon size={18} />
-                {label}
-              </Link>
-            ))}
+                Admin
+              </div>
+            )}
+            {adminItems.map(({ href, icon: Icon, label }) => {
+              const active = isActive(href);
+              return (
+                <Link
+                  key={href}
+                  href={href}
+                  className={`nav-item ${active ? "active" : ""}`}
+                  style={{
+                    justifyContent: collapsed ? "center" : "flex-start",
+                    padding: collapsed ? "12px" : "10px 14px",
+                  }}
+                  onClick={onCloseMobile}
+                  title={collapsed ? label : undefined}
+                >
+                  <Icon size={20} style={{ flexShrink: 0 }} />
+                  {!collapsed && <span>{label}</span>}
+                </Link>
+              );
+            })}
           </>
         )}
       </nav>
 
-      {/* User info + logout */}
+      {/* User profile & logout */}
       <div
         style={{
           borderTop: "1px solid var(--border)",
-          paddingTop: "16px",
+          paddingTop: "14px",
           display: "flex",
           flexDirection: "column",
           gap: "8px",
@@ -145,9 +186,19 @@ export function Sidebar({ userRole, userName, userImage, userEmail }: SidebarPro
           <Link
             href="/login"
             className="nav-item"
-            style={{ width: "100%", justifyContent: "center", background: "var(--primary)", color: "var(--primary-foreground)" }}
+            style={{
+              width: "100%",
+              justifyContent: "center",
+              background: "var(--gradient-primary)",
+              color: "white",
+              fontWeight: 700,
+              padding: collapsed ? "10px" : "10px 14px",
+            }}
+            onClick={onCloseMobile}
+            title={collapsed ? "Đăng nhập" : undefined}
           >
-            Đăng nhập / Đăng ký
+            <LogOut size={18} />
+            {!collapsed && <span>Đăng nhập</span>}
           </Link>
         ) : (
           <>
@@ -156,14 +207,22 @@ export function Sidebar({ userRole, userName, userImage, userEmail }: SidebarPro
                 display: "flex",
                 alignItems: "center",
                 gap: "10px",
-                padding: "8px",
+                padding: collapsed ? "4px" : "6px 8px",
+                justifyContent: collapsed ? "center" : "flex-start",
               }}
             >
               {userImage ? (
                 <img
                   src={userImage}
-                  alt={userName ?? ""}
-                  style={{ width: 36, height: 36, borderRadius: "50%", border: "2px solid var(--primary)" }}
+                  alt=""
+                  style={{
+                    width: 36,
+                    height: 36,
+                    borderRadius: "50%",
+                    border: "2px solid var(--primary)",
+                    objectFit: "cover",
+                    flexShrink: 0,
+                  }}
                 />
               ) : (
                 <div
@@ -175,47 +234,61 @@ export function Sidebar({ userRole, userName, userImage, userEmail }: SidebarPro
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
-                    fontSize: "16px",
-                    fontWeight: 700,
+                    fontSize: "15px",
+                    fontWeight: 800,
                     color: "white",
+                    flexShrink: 0,
                   }}
                 >
                   {userName?.[0]?.toUpperCase() ?? "U"}
                 </div>
               )}
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div
-                  style={{
-                    fontSize: "0.85rem",
-                    fontWeight: 600,
-                    color: "var(--card-foreground)",
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  {userName ?? "Thành viên"}
+              {!collapsed && (
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div
+                    style={{
+                      fontSize: "0.85rem",
+                      fontWeight: 700,
+                      color: "var(--card-foreground)",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {userName ?? "Thành viên"}
+                  </div>
+                  <div
+                    style={{
+                      fontSize: "0.7rem",
+                      color: "var(--muted-foreground)",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {userEmail}
+                  </div>
                 </div>
-                <div
-                  style={{
-                    fontSize: "0.7rem",
-                    color: "var(--muted-foreground)",
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  {userEmail}
-                </div>
-              </div>
+              )}
             </div>
+
             <button
-              onClick={() => signOut({ callbackUrl: "/login" })}
+              onClick={() => {
+                onCloseMobile();
+                signOut({ callbackUrl: "/login" });
+              }}
               className="nav-item"
-              style={{ width: "100%", background: "none", border: "none" }}
+              style={{
+                width: "100%",
+                background: "none",
+                border: "none",
+                justifyContent: collapsed ? "center" : "flex-start",
+                padding: collapsed ? "10px" : "8px 14px",
+              }}
+              title={collapsed ? "Đăng xuất" : undefined}
             >
-              <LogOut size={18} />
-              Đăng xuất
+              <LogOut size={18} style={{ flexShrink: 0 }} />
+              {!collapsed && <span>Đăng xuất</span>}
             </button>
           </>
         )}
@@ -225,10 +298,10 @@ export function Sidebar({ userRole, userName, userImage, userEmail }: SidebarPro
 
   return (
     <>
-      {/* Desktop sidebar */}
+      {/* 💻 DESKTOP SIDEBAR */}
       <aside
         style={{
-          width: "240px",
+          width: isCollapsed ? "72px" : "240px",
           flexShrink: 0,
           borderRight: "1px solid var(--border)",
           background: "var(--card)",
@@ -236,47 +309,26 @@ export function Sidebar({ userRole, userName, userImage, userEmail }: SidebarPro
           position: "sticky",
           top: 0,
           overflowY: "auto",
+          transition: "width 0.25s cubic-bezier(0.4, 0, 0.2, 1)",
+          zIndex: 30,
         }}
         className="hidden md:block"
       >
-        <SidebarContent />
+        <SidebarContent collapsed={isCollapsed} />
       </aside>
 
-      {/* Mobile menu button */}
-      <button
-        onClick={() => setMobileOpen(!mobileOpen)}
-        style={{
-          position: "fixed",
-          top: "16px",
-          left: "16px",
-          zIndex: 50,
-          width: "40px",
-          height: "40px",
-          borderRadius: "10px",
-          background: "var(--card)",
-          border: "1px solid var(--border)",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          cursor: "pointer",
-          color: "var(--foreground)",
-        }}
-        className="md:hidden"
-      >
-        {mobileOpen ? <X size={20} /> : <Menu size={20} />}
-      </button>
-
-      {/* Mobile sidebar overlay */}
+      {/* 📱 MOBILE SIDEBAR DRAWER OVERLAY */}
       {mobileOpen && (
         <>
           <div
             style={{
               position: "fixed",
               inset: 0,
-              background: "rgba(0,0,0,0.7)",
-              zIndex: 40,
+              background: "rgba(0,0,0,0.75)",
+              backdropFilter: "blur(4px)",
+              zIndex: 45,
             }}
-            onClick={() => setMobileOpen(false)}
+            onClick={onCloseMobile}
           />
           <aside
             style={{
@@ -292,7 +344,7 @@ export function Sidebar({ userRole, userName, userImage, userEmail }: SidebarPro
             }}
             className="animate-slide-in"
           >
-            <SidebarContent />
+            <SidebarContent collapsed={false} />
           </aside>
         </>
       )}

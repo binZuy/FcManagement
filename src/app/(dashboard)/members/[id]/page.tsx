@@ -1,10 +1,17 @@
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
-import { formatCurrency, formatDate, formatDateTime } from "@/lib/utils";
+import { formatDate } from "@/lib/utils";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, Mail, Phone, Hash, Calendar, AlertCircle, CheckCircle } from "lucide-react";
-import { MarkPaidButton } from "@/components/MarkPaidButton";
+import { ArrowLeft, Mail, Phone, Calendar, CreditCard, ChevronRight, Quote } from "lucide-react";
+import { EditProfileModal } from "@/components/EditProfileModal";
+
+const POSITION_LABELS: Record<string, { label: string; icon: string }> = {
+  GOALKEEPER: { label: "Thủ môn", icon: "🧤" },
+  DEFENDER: { label: "Hậu vệ", icon: "🛡️" },
+  MIDFIELDER: { label: "Tiền vệ", icon: "⚙️" },
+  FORWARD: { label: "Tiền đạo", icon: "⚽" },
+};
 
 const ATTEND_LABELS: Record<string, { label: string; color: string }> = {
   ATTENDED: { label: "Có mặt", color: "#4ade80" },
@@ -13,69 +20,130 @@ const ATTEND_LABELS: Record<string, { label: string; color: string }> = {
   EXCUSED: { label: "Xin phép", color: "#a5b4fc" },
 };
 
-const RECORD_STATUS: Record<string, { label: string; cls: string; color: string }> = {
-  PENDING: { label: "Chưa đóng", cls: "badge-pending", color: "#facc15" },
-  PARTIAL: { label: "Đóng thiếu", cls: "badge-pending", color: "#fb923c" },
-  PAID: { label: "Đã đóng", cls: "badge-paid", color: "#4ade80" },
-  OVERDUE: { label: "Quá hạn", cls: "badge-overdue", color: "#f87171" },
-  WAIVED: { label: "Miễn", cls: "badge-waived", color: "#94a3b8" },
-};
+// Hàm che Email: chỉ giữ chữ đầu và chữ cuối trước @
+function maskEmail(email: string | null): string {
+  if (!email) return "—";
+  const [name, domain] = email.split("@");
+  if (!domain || name.length <= 1) return "***";
+  const first = name[0];
+  const last = name[name.length - 1];
+  return `${first}***${last}@${domain}`;
+}
+
+// Hàm che SĐT: chỉ giữ số đầu và số cuối
+function maskPhone(phone: string | null): string {
+  if (!phone) return "—";
+  if (phone.length <= 2) return "***";
+  const first = phone[0];
+  const last = phone[phone.length - 1];
+  return `${first}***${last}`;
+}
 
 type Params = { params: Promise<{ id: string }> };
 
 export default async function MemberDetailPage({ params }: Params) {
   const { id } = await params;
   const session = await auth();
+
+  const isAuthenticated = !!session?.user;
   const isAdmin = session?.user?.role === "ADMIN";
 
   const member = await prisma.member.findUnique({
     where: { id },
     include: {
-      user: { select: { name: true, email: true, image: true, phone: true } },
+      user: { select: { id: true, name: true, email: true, image: true, phone: true } },
       attendances: {
         include: { match: true },
         orderBy: { match: { matchDate: "desc" } },
-        take: 20,
       },
       paymentRecords: {
-        include: { session: true },
-        orderBy: { createdAt: "desc" },
+        select: { status: true },
       },
     },
   });
 
   if (!member) notFound();
 
-  // Tách biệt record chưa đóng và đã đóng
-  const unpaidRecords = member.paymentRecords.filter(r => ["PENDING", "OVERDUE"].includes(r.status));
-  const paidRecords = member.paymentRecords.filter(r => ["PAID", "WAIVED"].includes(r.status)).slice(0, 15); // Chỉ lấy 15 giao dịch gần nhất cho lịch sử
+  const isOwner = session?.user?.id === member.userId;
+  const canEdit = isAdmin || isOwner;
 
+  // Đếm số trận chưa đóng
+  const unpaidCount = member.paymentRecords.filter((r) =>
+    ["PENDING", "OVERDUE"].includes(r.status)
+  ).length;
+
+  // Tính thông số thi đấu
   const totalAttended = member.attendances.filter((a) => a.status === "ATTENDED").length;
-  const totalPaid = member.paymentRecords.filter((r) => r.status === "PAID").length;
-  const totalOwed = member.paymentRecords
-    .filter((r) => r.status !== "WAIVED")
-    .reduce((s, r) => s + r.amountRequired, 0);
-  const totalPaidAmount = member.paymentRecords
-    .filter((r) => r.status === "PAID")
-    .reduce((s, r) => s + r.amountPaid, 0);
-  const currentDebt = Math.max(0, totalOwed - totalPaidAmount);
+
+  // Tính số ngày chưa quay trở lại đá (kể từ trận đá gần nhất)
+  const lastAttended = member.attendances.find((a) => a.status === "ATTENDED");
+  let daysSinceLastMatchStr = "—";
+  if (lastAttended) {
+    const lastDate = new Date(lastAttended.match.matchDate);
+    const now = new Date();
+    const diffTime = Math.max(0, now.getTime() - lastDate.getTime());
+    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+    daysSinceLastMatchStr = diffDays === 0 ? "Hôm nay" : `${diffDays} ngày`;
+  }
+
+  // Tỷ lệ thắng
+  const attendedMatchesWithResult = member.attendances.filter(
+    (a) => a.status === "ATTENDED" && a.match.result
+  );
+  const winCount = attendedMatchesWithResult.filter((a) => a.match.result === "WIN").length;
+  const winRate =
+    attendedMatchesWithResult.length > 0
+      ? Math.round((winCount / attendedMatchesWithResult.length) * 100)
+      : 0;
+
+  const posConfig = member.position ? POSITION_LABELS[member.position] : null;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "28px" }}>
-      {/* Back */}
-      <Link href="/members" className="btn btn-secondary" style={{ alignSelf: "flex-start" }}>
-        <ArrowLeft size={16} />
-        Quay lại
-      </Link>
+    <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
+      {/* Top action bar */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "12px" }}>
+        <Link href="/members" className="btn btn-secondary" style={{ padding: "6px 12px", fontSize: "0.82rem" }}>
+          <ArrowLeft size={16} />
+          Quay lại danh sách
+        </Link>
 
-      {/* Profile header */}
-      <div className="glass-card" style={{ padding: "32px" }}>
-        <div style={{ display: "flex", alignItems: "flex-start", gap: "24px", flexWrap: "wrap" }}>
+        {/* Nút Sửa Profile dành cho Chính chủ hoặc Admin */}
+        {canEdit && (
+          <EditProfileModal
+            memberId={member.id}
+            initialName={member.user.name ?? ""}
+            initialPhone={member.user.phone ?? ""}
+            initialJerseyNumber={member.jerseyNumber}
+            initialPosition={member.position}
+            initialNote={member.note}
+          />
+        )}
+      </div>
+
+      {/* Header Profile Thẻ Cầu Thủ */}
+      <div
+        className="glass-card"
+        style={{
+          padding: "24px",
+          background: "linear-gradient(135deg, rgba(17,24,39,0.9), rgba(30,41,59,0.8))",
+          border: "1px solid rgba(34,197,94,0.2)",
+          borderRadius: "16px",
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: "20px", flexWrap: "wrap" }}>
           {member.user.image ? (
             <img
               src={member.user.image}
-              alt={member.user.name ?? ""}
-              style={{ width: 80, height: 80, borderRadius: "50%", border: "3px solid var(--primary)", objectFit: "cover" }}
+              alt=""
+              style={{
+                width: 80,
+                height: 80,
+                borderRadius: "50%",
+                border: "3px solid var(--primary)",
+                objectFit: "cover",
+                flexShrink: 0,
+                boxShadow: "0 4px 15px rgba(34,197,94,0.3)",
+              }}
             />
           ) : (
             <div
@@ -96,174 +164,224 @@ export default async function MemberDetailPage({ params }: Params) {
               {member.user.name?.[0]?.toUpperCase() ?? "?"}
             </div>
           )}
-          <div style={{ flex: 1 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap", marginBottom: "8px" }}>
+
+          <div style={{ flex: 1, minWidth: "220px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap", marginBottom: "6px" }}>
               <h1 style={{ fontSize: "1.5rem", fontWeight: 800, color: "var(--card-foreground)" }}>
                 {member.user.name}
               </h1>
               {member.jerseyNumber && (
-                <span style={{ padding: "4px 12px", background: "rgba(34,197,94,0.15)", color: "var(--primary)", borderRadius: "999px", fontSize: "0.85rem", fontWeight: 700 }}>
+                <span
+                  style={{
+                    padding: "3px 10px",
+                    background: "rgba(34,197,94,0.15)",
+                    color: "var(--primary)",
+                    borderRadius: "999px",
+                    fontSize: "0.82rem",
+                    fontWeight: 700,
+                    border: "1px solid rgba(34,197,94,0.3)",
+                  }}
+                >
                   #{member.jerseyNumber}
                 </span>
               )}
+              {posConfig && (
+                <span
+                  style={{
+                    padding: "3px 10px",
+                    background: "rgba(96,165,250,0.15)",
+                    color: "#60a5fa",
+                    borderRadius: "999px",
+                    fontSize: "0.82rem",
+                    fontWeight: 600,
+                  }}
+                >
+                  {posConfig.icon} {posConfig.label}
+                </span>
+              )}
             </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: "8px", color: "var(--muted-foreground)", fontSize: "0.85rem" }}>
-                <Mail size={14} />
-                {member.user.email}
+
+            {/* Email & SĐT (Đã che chỉ giữ chữ đầu và chữ cuối nếu chưa đăng nhập) */}
+            <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px", color: "var(--muted-foreground)", fontSize: "0.82rem" }}>
+                <Mail size={14} style={{ flexShrink: 0 }} />
+                <span>
+                  {isAuthenticated ? (member.user.email ?? "—") : maskEmail(member.user.email)}
+                </span>
               </div>
-              {member.user.phone && (
-                <div style={{ display: "flex", alignItems: "center", gap: "8px", color: "var(--muted-foreground)", fontSize: "0.85rem" }}>
-                  <Phone size={14} />
-                  {member.user.phone}
+              <div style={{ display: "flex", alignItems: "center", gap: "8px", color: "var(--muted-foreground)", fontSize: "0.82rem" }}>
+                <Phone size={14} style={{ flexShrink: 0 }} />
+                <span>
+                  {isAuthenticated ? (member.user.phone ?? "Chưa cập nhật") : maskPhone(member.user.phone)}
+                </span>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px", color: "var(--muted-foreground)", fontSize: "0.82rem" }}>
+                <Calendar size={14} style={{ flexShrink: 0 }} />
+                <span>Gia nhập: {formatDate(member.joinDate)}</span>
+              </div>
+
+              {!isAuthenticated && (
+                <div style={{ fontSize: "0.72rem", color: "#facc15", marginTop: "2px" }}>
+                  🔒 Bạn đang xem ở chế độ Khách. Đăng nhập để xem đầy đủ SĐT & Email.
                 </div>
               )}
-              <div style={{ display: "flex", alignItems: "center", gap: "8px", color: "var(--muted-foreground)", fontSize: "0.85rem" }}>
-                <Calendar size={14} />
-                Gia nhập: {formatDate(member.joinDate)}
-              </div>
-              <div style={{ display: "flex", alignItems: "center", gap: "8px", color: "var(--muted-foreground)", fontSize: "0.85rem" }}>
-                <Hash size={14} />
-                Mã CK: <strong style={{ color: "var(--primary)" }}>FCM {member.code}</strong>
-              </div>
             </div>
           </div>
         </div>
 
-        {/* Mini stats */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: "12px", marginTop: "24px", paddingTop: "24px", borderTop: "1px solid var(--border)" }}>
-          {[
-            { label: "Trận đã đá", value: totalAttended },
-            { label: "Phiên đã đóng", value: `${totalPaid}/${member.paymentRecords.length}` },
-            { label: "Tổng đã đóng", value: formatCurrency(totalPaidAmount) },
-            { label: "Tổng nợ hiện tại", value: formatCurrency(currentDebt), color: currentDebt > 0 ? "#f87171" : "#4ade80" },
-          ].map((s, i) => (
-            <div key={i} style={{ textAlign: "center" }}>
-              <div style={{ fontSize: "1.25rem", fontWeight: 800, color: s.color ?? "var(--card-foreground)" }}>{s.value}</div>
-              <div style={{ fontSize: "0.75rem", color: "var(--muted-foreground)" }}>{s.label}</div>
+        {/* Khẩu hiệu / Bio */}
+        {member.note && (
+          <div
+            style={{
+              marginTop: "16px",
+              padding: "10px 14px",
+              borderRadius: "10px",
+              background: "rgba(30,41,59,0.5)",
+              borderLeft: "3px solid var(--primary)",
+              display: "flex",
+              alignItems: "center",
+              gap: "8px",
+              fontSize: "0.82rem",
+              fontStyle: "italic",
+              color: "#cbd5e1",
+            }}
+          >
+            <Quote size={14} color="var(--primary)" style={{ flexShrink: 0 }} />
+            <span>"{member.note}"</span>
+          </div>
+        )}
+
+        {/* 4 Chỉ số phong độ thi đấu */}
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))",
+            gap: "10px",
+            marginTop: "20px",
+            paddingTop: "20px",
+            borderTop: "1px solid var(--border)",
+          }}
+        >
+          <div style={{ textAlign: "center", background: "rgba(30,41,59,0.4)", padding: "10px", borderRadius: "8px" }}>
+            <div style={{ fontSize: "1.25rem", fontWeight: 800, color: "var(--primary)" }}>{totalAttended}</div>
+            <div style={{ fontSize: "0.72rem", color: "var(--muted-foreground)", marginTop: "2px" }}>Trận đã đá</div>
+          </div>
+
+          <div style={{ textAlign: "center", background: "rgba(30,41,59,0.4)", padding: "10px", borderRadius: "8px" }}>
+            <div style={{ fontSize: "1.25rem", fontWeight: 800, color: "#facc15" }}>{winRate}%</div>
+            <div style={{ fontSize: "0.72rem", color: "var(--muted-foreground)", marginTop: "2px" }}>Tỷ lệ thắng</div>
+          </div>
+
+          <div style={{ textAlign: "center", background: "rgba(30,41,59,0.4)", padding: "10px", borderRadius: "8px" }}>
+            <div style={{ fontSize: "1.1rem", fontWeight: 800, color: "#fb923c", paddingTop: "2px" }}>
+              {daysSinceLastMatchStr}
             </div>
-          ))}
+            <div style={{ fontSize: "0.72rem", color: "var(--muted-foreground)", marginTop: "2px" }}>Chưa đá lại</div>
+          </div>
+
+          <div style={{ textAlign: "center", background: "rgba(30,41,59,0.4)", padding: "10px", borderRadius: "8px" }}>
+            <div style={{ fontSize: "1rem", fontWeight: 800, color: "#a78bfa", paddingTop: "2px" }}>
+              {posConfig ? posConfig.label : "Chưa xếp"}
+            </div>
+            <div style={{ fontSize: "0.72rem", color: "var(--muted-foreground)", marginTop: "2px" }}>Vị trí thi đấu</div>
+          </div>
         </div>
       </div>
 
-      {/* Tách thành 2 cột trên Desktop, 1 cột trên Mobile */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(400px, 1fr))", gap: "24px" }}>
-        
-        {/* Left Column: Attendance */}
-        <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
-          <div className="glass-card" style={{ padding: "24px" }}>
-            <h2 style={{ fontSize: "1.1rem", fontWeight: 700, marginBottom: "16px", color: "var(--card-foreground)", display: "flex", alignItems: "center", gap: "8px" }}>
-              <Calendar size={18} /> Lịch sử tham gia
-            </h2>
-            <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-              {member.attendances.length === 0 && (
-                <p style={{ color: "var(--muted-foreground)", fontSize: "0.85rem", textAlign: "center", padding: "24px 0" }}>
-                  Chưa có lịch sử tham gia
-                </p>
-              )}
-              {member.attendances.map((a) => {
-                const st = ATTEND_LABELS[a.status] ?? { label: a.status, color: "white" };
-                return (
-                  <div key={a.id} style={{ display: "flex", alignItems: "center", gap: "12px", padding: "12px", borderRadius: "10px", background: "rgba(30,41,59,0.4)" }}>
-                    <div style={{ width: 10, height: 10, borderRadius: "50%", background: st.color, flexShrink: 0 }} />
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: "0.85rem", fontWeight: 600, color: "var(--card-foreground)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                        {a.match.title}
-                      </div>
-                      <div style={{ fontSize: "0.75rem", color: "var(--muted-foreground)", marginTop: "2px" }}>
-                        {formatDate(a.match.matchDate)}
-                      </div>
-                    </div>
-                    <span style={{ fontSize: "0.75rem", color: st.color, fontWeight: 700, flexShrink: 0 }}>
-                      {st.label}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-
-        {/* Right Column: Payments (Unpaid + Paid) */}
-        <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
-          
-          {/* Unpaid section */}
-          <div className="glass-card" style={{ padding: "24px", border: unpaidRecords.length > 0 ? "1px solid rgba(248,113,113,0.3)" : "1px solid var(--border)" }}>
-            <h2 style={{ fontSize: "1.1rem", fontWeight: 700, marginBottom: "16px", color: unpaidRecords.length > 0 ? "#f87171" : "var(--card-foreground)", display: "flex", alignItems: "center", gap: "8px" }}>
-              <AlertCircle size={18} /> Các khoản chưa đóng
-            </h2>
-            <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-              {unpaidRecords.length === 0 && (
-                <div style={{ textAlign: "center", padding: "24px 0", color: "#4ade80", fontSize: "0.9rem", fontWeight: 600 }}>
-                  Tuyệt vời! Không có khoản nợ nào.
+      {/* 💳 NÚT ĐIỀU HƯỚNG ĐẾN MÀN HÌNH THANH TOÁN (Chỉ hiển thị khi CÒN trận chưa đóng) */}
+      {unpaidCount > 0 && (
+        <Link href={`/payments/${member.id}`} style={{ textDecoration: "none" }}>
+          <div
+            className="glass-card hover-card"
+            style={{
+              padding: "18px 22px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              borderRadius: "14px",
+              border: "1px solid rgba(248,113,113,0.3)",
+              background: "rgba(239,68,68,0.04)",
+              transition: "all 0.2s ease",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
+              <div
+                style={{
+                  width: 44,
+                  height: 44,
+                  borderRadius: "12px",
+                  background: "rgba(239,68,68,0.15)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  flexShrink: 0,
+                }}
+              >
+                <CreditCard size={22} color="#f87171" />
+              </div>
+              <div>
+                <div style={{ fontWeight: 800, fontSize: "1rem", color: "var(--card-foreground)" }}>
+                  Tiền bóng (Còn {unpaidCount} trận chưa đóng 😣💸)
                 </div>
-              )}
-              {unpaidRecords.map((r) => {
-                const st = RECORD_STATUS[r.status] ?? { label: r.status, color: "white" };
-                const debt = r.amountRequired - r.amountPaid;
-                return (
-                  <div key={r.id} style={{ display: "flex", alignItems: "center", gap: "12px", padding: "12px", borderRadius: "10px", background: "rgba(239,68,68,0.05)", border: "1px solid rgba(239,68,68,0.1)" }}>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: "0.85rem", fontWeight: 700, color: "var(--card-foreground)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                        {r.session.title}
-                      </div>
-                      <div style={{ fontSize: "0.75rem", color: "var(--muted-foreground)", marginTop: "4px", display: "flex", gap: "8px" }}>
-                        <span style={{ color: st.color }}>{st.label}</span>
-                        <span>•</span>
-                        <span>Yêu cầu: {formatCurrency(r.amountRequired)}</span>
-                      </div>
-                    </div>
-                    <div style={{ textAlign: "right", flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "6px" }}>
-                      <div style={{ fontSize: "0.9rem", fontWeight: 800, color: "#f87171" }}>
-                        {formatCurrency(debt)}
-                      </div>
-                      {isAdmin && (
-                        <MarkPaidButton recordId={r.id} amountRequired={r.amountRequired} />
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
+                <div style={{ fontSize: "0.75rem", color: "var(--muted-foreground)", marginTop: "2px" }}>
+                  Xem chi tiết các trận tại đây
+                </div>
+              </div>
+            </div>
+
+            <div style={{ display: "flex", alignItems: "center", gap: "6px", color: "#f87171", fontWeight: 700, fontSize: "0.85rem" }}>
+              <span>Thanh toán</span>
+              <ChevronRight size={18} />
             </div>
           </div>
+        </Link>
+      )}
 
-          {/* Paid section */}
-          <div className="glass-card" style={{ padding: "24px" }}>
-            <h2 style={{ fontSize: "1.1rem", fontWeight: 700, marginBottom: "16px", color: "var(--card-foreground)", display: "flex", alignItems: "center", gap: "8px" }}>
-              <CheckCircle size={18} color="#4ade80" /> Lịch sử đã đóng
-            </h2>
-            <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-              {paidRecords.length === 0 && (
-                <p style={{ color: "var(--muted-foreground)", fontSize: "0.85rem", textAlign: "center", padding: "24px 0" }}>
-                  Chưa có lịch sử đóng tiền
-                </p>
-              )}
-              {paidRecords.map((r) => {
-                const st = RECORD_STATUS[r.status] ?? { label: r.status, cls: "" };
-                return (
-                  <div key={r.id} style={{ display: "flex", alignItems: "center", gap: "10px", padding: "10px 12px", borderRadius: "8px", background: "rgba(30,41,59,0.4)" }}>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: "0.8rem", fontWeight: 600, color: "var(--card-foreground)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                        {r.session.title}
-                      </div>
-                      <div style={{ fontSize: "0.7rem", color: "var(--muted-foreground)", marginTop: "2px" }}>
-                        {r.paidAt ? formatDateTime(r.paidAt) : "Đã hoàn thành"}
-                      </div>
+      {/* KHỐI LỊCH SỬ THAM GIA TRẬN ĐẤU */}
+      <div className="glass-card" style={{ padding: "24px" }}>
+        <h2 style={{ fontSize: "1.05rem", fontWeight: 700, marginBottom: "16px", color: "var(--card-foreground)", display: "flex", alignItems: "center", gap: "8px" }}>
+          <Calendar size={18} /> Lịch sử tham gia thi đấu ({member.attendances.length} trận)
+        </h2>
+
+        <div style={{ display: "flex", flexDirection: "column", gap: "8px", maxHeight: "500px", overflowY: "auto" }}>
+          {member.attendances.length === 0 && (
+            <p style={{ color: "var(--muted-foreground)", fontSize: "0.85rem", textAlign: "center", padding: "30px 0" }}>
+              Chưa đi đá trận nào ư? ⚽🏃‍♂Ra sân đê!
+            </p>
+          )}
+
+          {member.attendances.map((a) => {
+            const st = ATTEND_LABELS[a.status] ?? { label: a.status, color: "white" };
+            return (
+              <Link key={a.id} href={`/matches/${a.match.id}`} style={{ textDecoration: "none" }}>
+                <div
+                  className="hover-card"
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "12px",
+                    padding: "12px 14px",
+                    borderRadius: "10px",
+                    background: "rgba(30,41,59,0.4)",
+                    border: "1px solid rgba(255,255,255,0.04)",
+                  }}
+                >
+                  <div style={{ width: 8, height: 8, borderRadius: "50%", background: st.color, flexShrink: 0 }} />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: "0.85rem", fontWeight: 700, color: "var(--card-foreground)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {a.match.title}
                     </div>
-                    <div style={{ textAlign: "right", flexShrink: 0 }}>
-                      <div style={{ fontSize: "0.8rem", fontWeight: 700, color: "#4ade80" }}>
-                        {formatCurrency(r.amountPaid)}
-                      </div>
-                      <span className={st.cls} style={{ display: "inline-block", marginTop: "4px", padding: "2px 8px", borderRadius: "999px", fontSize: "0.65rem", fontWeight: 600 }}>
-                        {st.label}
-                      </span>
+                    <div style={{ fontSize: "0.75rem", color: "var(--muted-foreground)", marginTop: "2px" }}>
+                      {formatDate(a.match.matchDate)} {a.match.location ? `· 📍 ${a.match.location}` : ""}
                     </div>
                   </div>
-                );
-              })}
-            </div>
-          </div>
-
+                  <span style={{ fontSize: "0.75rem", color: st.color, fontWeight: 700, flexShrink: 0 }}>
+                    {st.label}
+                  </span>
+                </div>
+              </Link>
+            );
+          })}
         </div>
       </div>
     </div>

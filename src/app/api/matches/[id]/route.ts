@@ -11,14 +11,11 @@ import {
   PaymentType,
   PaymentStatus,
 } from "@prisma/client";
-import { calculateMemberFee } from "@/lib/fee-calculator";
 
 type Params = { params: Promise<{ id: string }> };
 
-// GET /api/matches/:id — Match detail with attendances
+// GET /api/matches/:id
 export async function GET(_req: NextRequest, { params }: Params) {
-
-
   const { id } = await params;
 
   const match = await prisma.matchSession.findUnique({
@@ -37,229 +34,282 @@ export async function GET(_req: NextRequest, { params }: Params) {
   });
 
   if (!match) {
-    return NextResponse.json({ error: "Match not found" }, { status: 404 });
+    return NextResponse.json({ error: "Trận đấu không tồn tại" }, { status: 404 });
   }
 
   return NextResponse.json({ data: match });
 }
 
-// PUT /api/matches/:id — Update match, set result, trigger fee calculation
-export async function PUT(request: NextRequest, { params }: Params) {
+// Hàm tính tiền sân mỗi suất dựa trên kết quả, đội, phương pháp chia
+function calcFeePerHead(params: {
+  matchType: string;
+  result: string | null;
+  feeSplitMethod: string;
+  feeTotal: number | null;
+  feeDefault: number | null;
+  feeWinner: number | null;
+  feeLose: number | null;
+  feeDraw: number | null;
+  teamSide: string | null;
+  totalHeads: number;
+  winningHeads: number;
+  losingHeads: number;
+}): number {
+  const { matchType, result, feeSplitMethod, feeTotal, feeDefault, feeWinner, feeLose, feeDraw, teamSide, totalHeads, winningHeads, losingHeads } = params;
+  if (!result) return 0;
+
+  if (feeTotal && feeTotal > 0) {
+    if (matchType === "INTERNAL") {
+      const method = feeSplitMethod || "EQUAL";
+      const winningTeamSide = result === "WIN" ? "TEAM_A" : "TEAM_B";
+      const isWinner = teamSide === winningTeamSide;
+
+      if (result === "DRAW" || method === "EQUAL") {
+        return totalHeads > 0 ? feeTotal / totalHeads : 0;
+      }
+      if (method === "LOSER_100") {
+        return isWinner ? 0 : losingHeads > 0 ? feeTotal / losingHeads : 0;
+      }
+      if (method === "LOSER_70_WINNER_30") {
+        return isWinner
+          ? winningHeads > 0 ? (feeTotal * 0.3) / winningHeads : 0
+          : losingHeads > 0 ? (feeTotal * 0.7) / losingHeads : 0;
+      }
+      if (method === "LOSER_60_WINNER_40") {
+        return isWinner
+          ? winningHeads > 0 ? (feeTotal * 0.4) / winningHeads : 0
+          : losingHeads > 0 ? (feeTotal * 0.6) / losingHeads : 0;
+      }
+      // fallback equal
+      return totalHeads > 0 ? feeTotal / totalHeads : 0;
+    } else {
+      // EXTERNAL – chia đều
+      return totalHeads > 0 ? feeTotal / totalHeads : 0;
+    }
+  }
+
+  // Dùng feeDefault / feeWinner / feeLose / feeDraw
+  if (feeDefault || feeWinner || feeLose || feeDraw) {
+    if (matchType === "EXTERNAL") {
+      if (result === "WIN") return feeWinner ?? feeDefault ?? 0;
+      if (result === "LOSE") return feeLose ?? feeDefault ?? 0;
+      if (result === "DRAW") return feeDraw ?? feeDefault ?? 0;
+    }
+    return feeDefault ?? 0;
+  }
+
+  return 0;
+}
+
+// Handler cập nhật match + tính feeAssigned cho từng attendance
+async function handleUpdateMatch(request: NextRequest, { params }: Params) {
   const session = await auth();
-  if (!session?.user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-  if (session.user.role !== Role.ADMIN) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
+  if (!session?.user) return NextResponse.json({ error: "Chưa đăng nhập" }, { status: 401 });
+  if (session.user.role !== Role.ADMIN) return NextResponse.json({ error: "Không có quyền" }, { status: 403 });
 
   const { id } = await params;
   const body = await request.json();
   const { result, status, title, location, note, feeWinner, feeLose, feeDraw, feeDefault, feeTotal, drinksFeeTotal, feeSplitMethod } = body;
 
-  console.log("PUT Match Session Payload:", { id, result, status, feeTotal, feeSplitMethod });
-
   const match = await prisma.matchSession.findUnique({
     where: { id },
     include: { attendances: true },
   });
-  if (!match) {
-    return NextResponse.json({ error: "Match not found" }, { status: 404 });
-  }
+  if (!match) return NextResponse.json({ error: "Không tìm thấy trận đấu" }, { status: 404 });
 
-  // Update match
+  let finalStatus: MatchStatus = match.status;
+  if (status) finalStatus = status as MatchStatus;
+  else if (result) finalStatus = MatchStatus.DONE;
+
   const updated = await prisma.matchSession.update({
     where: { id },
     data: {
-      title,
-      location,
-      note,
-      status: status as MatchStatus | undefined,
+      title, location, note,
+      status: finalStatus,
       result: (result === "" ? null : result) as MatchResult | null | undefined,
-      feeTotal: feeTotal !== undefined ? parseFloat(feeTotal) : undefined,
-      feeWinner: feeWinner !== undefined ? parseFloat(feeWinner) : undefined,
-      feeLose: feeLose !== undefined ? parseFloat(feeLose) : undefined,
-      feeDraw: feeDraw !== undefined ? parseFloat(feeDraw) : undefined,
-      feeDefault: feeDefault !== undefined ? parseFloat(feeDefault) : undefined,
-      drinksFeeTotal: drinksFeeTotal !== undefined ? parseFloat(drinksFeeTotal) : undefined,
+      feeTotal: feeTotal != null ? parseFloat(feeTotal) : undefined,
+      feeWinner: feeWinner != null ? parseFloat(feeWinner) : undefined,
+      feeLose: feeLose != null ? parseFloat(feeLose) : undefined,
+      feeDraw: feeDraw != null ? parseFloat(feeDraw) : undefined,
+      feeDefault: feeDefault != null ? parseFloat(feeDefault) : undefined,
+      drinksFeeTotal: drinksFeeTotal != null ? parseFloat(drinksFeeTotal) : undefined,
     },
   });
 
-  console.log("PUT Match Session Updated in DB:", { id: updated.id, result: updated.result, status: updated.status });
+  const active = match.attendances.filter(a => a.status === AttendStatus.ATTENDED || a.status === AttendStatus.LATE);
+  const totalHeads = active.reduce((s, a) => s + 1 + (a.guestCount || 0), 0);
+  const winningTeamSide = result === "WIN" ? TeamSide.TEAM_A : result === "LOSE" ? TeamSide.TEAM_B : null;
+  const winningHeads = winningTeamSide ? active.filter(a => a.teamSide === winningTeamSide).reduce((s, a) => s + 1 + (a.guestCount || 0), 0) : 0;
+  const losingHeads = winningTeamSide ? active.filter(a => a.teamSide !== winningTeamSide).reduce((s, a) => s + 1 + (a.guestCount || 0), 0) : 0;
 
-  const activeAttendances = match.attendances.filter(
-    (a) => a.status === AttendStatus.ATTENDED || a.status === AttendStatus.LATE
-  );
+  const drinkHeads = active.reduce((s, a) => s + (a.isDrinks ? 1 : 0) + (a.drinksGuestCount || 0), 0);
+  const drinksFeePerHead = drinkHeads > 0 && updated.drinksFeeTotal ? updated.drinksFeeTotal / drinkHeads : 0;
 
-  const totalHeads = activeAttendances.reduce((acc, a) => acc + 1 + (a.guestCount || 0), 0);
-
-  // Calculate drinks fee per person
-  let drinksFeePerPerson = 0;
-  if (updated.drinksFeeTotal && updated.drinksFeeTotal > 0) {
-    const drinkHeads = activeAttendances
-      .reduce((acc, a) => acc + (a.isDrinks ? 1 : 0) + (a.drinksGuestCount || 0), 0);
-    if (drinkHeads > 0) {
-      drinksFeePerPerson = updated.drinksFeeTotal / drinkHeads;
-    }
-  }
-
-  // Calculate base match fee per person
-  if (match.attendances.length > 0) {
-    await Promise.all(
-      activeAttendances.map((attendance) => {
-        // Determine this member's result based on team side
-        let memberResult: MatchResult | null = null;
-        if (result && attendance.teamSide === TeamSide.TEAM_A) {
-          memberResult = result as MatchResult;
-        } else if (result && attendance.teamSide === TeamSide.TEAM_B) {
-          // Opposite result for team B
-          if (result === MatchResult.WIN) memberResult = MatchResult.LOSE;
-          else if (result === MatchResult.LOSE) memberResult = MatchResult.WIN;
+  if (active.length > 0) {
+    await Promise.all(active.map(a => {
+      let memberResult: MatchResult | null = null;
+      if (result) {
+        if (a.teamSide === TeamSide.TEAM_A) memberResult = result as MatchResult;
+        else if (a.teamSide === TeamSide.TEAM_B) {
+          if (result === "WIN") memberResult = MatchResult.LOSE;
+          else if (result === "LOSE") memberResult = MatchResult.WIN;
           else memberResult = MatchResult.DRAW;
-        } else {
-          memberResult = result as MatchResult | null;
-        }
+        } else memberResult = result as MatchResult;
+      }
 
-        let fee = 0;
-        const userHeads = 1 + (attendance.guestCount || 0);
+      const fpH = calcFeePerHead({
+        matchType: match.matchType,
+        result,
+        feeSplitMethod: feeSplitMethod || "EQUAL",
+        feeTotal: updated.feeTotal,
+        feeDefault: updated.feeDefault,
+        feeWinner: updated.feeWinner,
+        feeLose: updated.feeLose,
+        feeDraw: updated.feeDraw,
+        teamSide: a.teamSide,
+        totalHeads,
+        winningHeads,
+        losingHeads,
+      });
 
-        if (result) {
-          if (updated.feeTotal && updated.feeTotal > 0) {
-            if (match.matchType === "INTERNAL") {
-              const method = feeSplitMethod || "EQUAL";
-              
-              if (result === MatchResult.DRAW || method === "EQUAL") {
-                fee = totalHeads > 0 ? (updated.feeTotal / totalHeads) * userHeads : 0;
-              } else {
-                const winningTeamSide = result === MatchResult.WIN ? TeamSide.TEAM_A : TeamSide.TEAM_B;
-                const winningHeads = activeAttendances
-                  .filter(a => a.teamSide === winningTeamSide)
-                  .reduce((acc, a) => acc + 1 + (a.guestCount || 0), 0);
-                const losingHeads = activeAttendances
-                  .filter(a => a.teamSide !== winningTeamSide)
-                  .reduce((acc, a) => acc + 1 + (a.guestCount || 0), 0);
+      const feeAssigned = fpH * (1 + (a.guestCount || 0));
+      const drinksFeeAssigned = ((a.isDrinks ? 1 : 0) + (a.drinksGuestCount || 0)) * drinksFeePerHead;
 
-                const isWinner = attendance.teamSide === winningTeamSide;
-
-                if (method === "LOSER_100") {
-                  if (isWinner) {
-                    fee = 0;
-                  } else {
-                    fee = losingHeads > 0 ? (updated.feeTotal / losingHeads) * userHeads : 0;
-                  }
-                } else if (method === "LOSER_70_WINNER_30") {
-                  if (isWinner) {
-                    fee = winningHeads > 0 ? ((updated.feeTotal * 0.3) / winningHeads) * userHeads : 0;
-                  } else {
-                    fee = losingHeads > 0 ? ((updated.feeTotal * 0.7) / losingHeads) * userHeads : 0;
-                  }
-                } else if (method === "LOSER_60_WINNER_40") {
-                  if (isWinner) {
-                    fee = winningHeads > 0 ? ((updated.feeTotal * 0.4) / winningHeads) * userHeads : 0;
-                  } else {
-                    fee = losingHeads > 0 ? ((updated.feeTotal * 0.6) / losingHeads) * userHeads : 0;
-                  }
-                }
-              }
-            } else {
-              // Friendly match (EXTERNAL) - always split equally
-              fee = totalHeads > 0 ? (updated.feeTotal / totalHeads) * userHeads : 0;
-            }
-          } else {
-            // Use feeDefault if no feeTotal
-            const singleFee = calculateMemberFee(
-              {
-                matchType: match.matchType,
-                feeWinner: updated.feeWinner,
-                feeLose: updated.feeLose,
-                feeDraw: updated.feeDraw,
-                feeDefault: updated.feeDefault,
-              },
-              memberResult
-            );
-            fee = singleFee * userHeads;
-          }
-        }
-
-        const memberDrinkHeads = (attendance.isDrinks ? 1 : 0) + (attendance.drinksGuestCount || 0);
-        const drinksFee = memberDrinkHeads * drinksFeePerPerson;
-
-        return prisma.matchAttendance.update({
-          where: { id: attendance.id },
-          data: { matchResultForMember: memberResult, feeAssigned: fee, drinksFeeAssigned: drinksFee },
-        });
-      })
-    );
+      return prisma.matchAttendance.update({
+        where: { id: a.id },
+        data: { matchResultForMember: memberResult, feeAssigned, drinksFeeAssigned },
+      });
+    }));
   }
 
   return NextResponse.json({ data: updated });
 }
 
-// POST /api/matches/:id/finalize — Create PaymentSession from match result
+export async function PUT(request: NextRequest, ctx: Params) {
+  return handleUpdateMatch(request, ctx);
+}
+
+export async function PATCH(request: NextRequest, ctx: Params) {
+  return handleUpdateMatch(request, ctx);
+}
+
+// POST /api/matches/:id — Tạo / Đồng bộ PaymentSession từ kết quả trận
 export async function POST(request: NextRequest, { params }: Params) {
   const session = await auth();
-  if (!session?.user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-  if (session.user.role !== Role.ADMIN) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
+  if (!session?.user) return NextResponse.json({ error: "Chưa đăng nhập" }, { status: 401 });
+  if (session.user.role !== Role.ADMIN) return NextResponse.json({ error: "Không có quyền" }, { status: 403 });
 
   const { id } = await params;
-  const body = await request.json();
-  const { dueDate } = body;
 
-  console.log("POST Finalize Request for Match:", id);
-
+  // Lấy match với tất cả attendance hiện tại (đã được upsert)
   const match = await prisma.matchSession.findUnique({
     where: { id },
     include: {
       attendances: {
-        where: {
-          status: { in: [AttendStatus.ATTENDED, AttendStatus.LATE] },
-        },
+        where: { status: { in: [AttendStatus.ATTENDED, AttendStatus.LATE] } },
       },
+      paymentSessions: { include: { paymentRecords: true } },
     },
   });
 
-  if (!match) {
-    return NextResponse.json({ error: "Match not found" }, { status: 404 });
+  if (!match) return NextResponse.json({ error: "Không tìm thấy trận đấu" }, { status: 404 });
+
+  await prisma.matchSession.update({ where: { id }, data: { status: MatchStatus.DONE } });
+
+  // Tạo phiên thu tiền nếu chưa có
+  let paySession = match.paymentSessions[0];
+  if (!paySession) {
+    paySession = await prisma.paymentSession.create({
+      data: {
+        code: match.code,
+        title: `Tiền sân: ${match.title}`,
+        type: PaymentType.MATCH_FEE,
+        matchId: match.id,
+        status: PaymentStatus.OPEN,
+      },
+    }) as any;
+    (paySession as any).paymentRecords = [];
   }
 
-  console.log("POST Finalize Match Status from DB:", { result: match.result, status: match.status });
-
-  if (!match.result) {
-    return NextResponse.json(
-      { error: "Match result must be set before creating payment session" },
-      { status: 400 }
-    );
+  const active = match.attendances;
+  if (active.length === 0) {
+    return NextResponse.json({ data: paySession, warning: "Chưa có thành viên điểm danh" }, { status: 200 });
   }
 
-  // Create PaymentSession
-  const paySession = await prisma.paymentSession.create({
-    data: {
-      code: match.code,
-      title: `Tiền sân: ${match.title}`,
-      type: PaymentType.MATCH_FEE,
-      matchId: match.id,
-      dueDate: dueDate ? new Date(dueDate) : undefined,
-      status: PaymentStatus.OPEN,
-    },
-  });
+  // Tính lại fee từ đầu để đồng nhất (không phụ thuộc feeAssigned cũ)
+  const totalHeads = active.reduce((s, a) => s + 1 + (a.guestCount || 0), 0);
+  const winningTeamSide = match.result === "WIN" ? "TEAM_A" : match.result === "LOSE" ? "TEAM_B" : null;
+  const winningHeads = winningTeamSide ? active.filter(a => a.teamSide === winningTeamSide).reduce((s, a) => s + 1 + (a.guestCount || 0), 0) : 0;
+  const losingHeads = winningTeamSide ? active.filter(a => a.teamSide !== winningTeamSide).reduce((s, a) => s + 1 + (a.guestCount || 0), 0) : 0;
 
-  // Create PaymentRecord for each attended member
-  const records = match.attendances.map((a) => {
-    const baseFee = a.feeAssigned ?? match.feeDefault ?? 0;
-    const drinksFee = a.drinksFeeAssigned ?? 0;
-    return {
-      sessionId: paySession.id,
-      memberId: a.memberId,
-      amountRequired: baseFee + drinksFee,
-      status: RecordStatus.PENDING,
-    };
-  });
+  const drinkHeads = active.reduce((s, a) => s + (a.isDrinks ? 1 : 0) + (a.drinksGuestCount || 0), 0);
+  const drinksFeePerHead = drinkHeads > 0 && match.drinksFeeTotal ? match.drinksFeeTotal / drinkHeads : 0;
 
-  await prisma.paymentRecord.createMany({ data: records });
+  const existingRecords: any[] = (paySession as any).paymentRecords ?? [];
 
-  return NextResponse.json({ data: paySession }, { status: 201 });
+  for (const a of active) {
+    const fpH = calcFeePerHead({
+      matchType: match.matchType,
+      result: match.result,
+      feeSplitMethod: match.feeSplitMethod || "EQUAL",
+      feeTotal: match.feeTotal,
+      feeDefault: match.feeDefault,
+      feeWinner: match.feeWinner,
+      feeLose: match.feeLose,
+      feeDraw: match.feeDraw,
+      teamSide: a.teamSide,
+      totalHeads,
+      winningHeads,
+      losingHeads,
+    });
+
+    // Tiền bản thân
+    const selfFee = fpH + (a.isDrinks ? drinksFeePerHead : 0);
+    // Tiền bạn đi cùng
+    const guestFee = (a.guestCount || 0) * fpH + (a.drinksGuestCount || 0) * drinksFeePerHead;
+    // Tổng tiền = bản thân + bạn đi cùng (vì unique constraint chỉ cho 1 record/member)
+    const totalFee = Math.round(selfFee + guestFee);
+
+    // note để UI biết breakdown: "Bạn: 3 người" hoặc null
+    const noteText = (a.guestCount || 0) > 0
+      ? `Bạn: ${a.guestCount} người (+${Math.round(guestFee).toLocaleString("vi-VN")}đ)`
+      : null;
+
+    // Cập nhật attendance để đồng bộ
+    await prisma.matchAttendance.update({
+      where: { id: a.id },
+      data: {
+        feeAssigned: fpH * (1 + (a.guestCount || 0)),
+        drinksFeeAssigned: ((a.isDrinks ? 1 : 0) + (a.drinksGuestCount || 0)) * drinksFeePerHead,
+      },
+    });
+
+    // Tìm record hiện tại (unique: sessionId + memberId)
+    const existingRecord = existingRecords.find(r => r.memberId === a.memberId);
+
+    if (existingRecord) {
+      if (existingRecord.status !== "PAID") {
+        await prisma.paymentRecord.update({
+          where: { id: existingRecord.id },
+          data: {
+            amountRequired: totalFee,
+            status: totalFee === 0 ? RecordStatus.WAIVED : existingRecord.status,
+            note: noteText,
+          },
+        });
+      }
+    } else {
+      await prisma.paymentRecord.create({
+        data: {
+          sessionId: paySession.id,
+          memberId: a.memberId,
+          amountRequired: totalFee,
+          status: totalFee === 0 ? RecordStatus.WAIVED : RecordStatus.PENDING,
+          note: noteText,
+        },
+      });
+    }
+  }
+
+  return NextResponse.json({ data: paySession }, { status: 200 });
 }

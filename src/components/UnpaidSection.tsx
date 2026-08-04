@@ -1,14 +1,16 @@
 "use client";
 
+import { useState } from "react";
 import { QRPaymentDialog } from "@/components/QRPaymentDialog";
 import { MarkPaidButton } from "@/components/MarkPaidButton";
-import { AlertCircle } from "lucide-react";
+import { AlertCircle, CheckSquare, Square } from "lucide-react";
 
 interface UnpaidRecord {
   id: string;
   amountRequired: number;
   amountPaid: number;
   status: string;
+  note?: string | null;
   session: {
     title: string;
     code: string;
@@ -44,6 +46,28 @@ export function UnpaidSection({
   unpaidRecords,
   isAdmin,
 }: UnpaidSectionProps) {
+  // Mặc định tick chọn TẤT CẢ các khoản chưa đóng
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(
+    new Set(unpaidRecords.map((r) => r.id))
+  );
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const selectAll = () => setSelectedIds(new Set(unpaidRecords.map((r) => r.id)));
+  const clearAll = () => setSelectedIds(new Set());
+
+  // Tính tổng tiền các khoản đã tick
+  const selectedTotal = unpaidRecords
+    .filter((r) => selectedIds.has(r.id))
+    .reduce((sum, r) => sum + (r.amountRequired - r.amountPaid), 0);
+
   const totalDebt = unpaidRecords.reduce(
     (sum, r) => sum + (r.amountRequired - r.amountPaid),
     0
@@ -85,19 +109,78 @@ export function UnpaidSection({
           Các trận/khoản chưa đóng ({unpaidRecords.length})
         </h2>
 
-        {/* QR Button - hiển thị khi có khoản chưa đóng */}
+        {/* Action Button: Tạo QR trực tiếp từ danh sách chọn */}
         {unpaidRecords.length > 0 && (
           <QRPaymentDialog
             memberId={memberId}
             memberCode={memberCode}
             memberName={memberName}
-            unpaidRecords={unpaidRecords}
+            selectedRecordIds={Array.from(selectedIds)}
+            selectedTotalAmount={selectedTotal}
           />
         )}
       </div>
 
-      {/* Records list */}
-      <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+      {/* Select Toolbar */}
+      {unpaidRecords.length > 0 && (
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            padding: "10px 14px",
+            borderRadius: "8px",
+            background: "rgba(30, 41, 59, 0.4)",
+            border: "1px solid rgba(255,255,255,0.06)",
+            marginBottom: "14px",
+            flexWrap: "wrap",
+            gap: "8px",
+          }}
+        >
+          <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+            <button
+              onClick={selectAll}
+              style={{
+                padding: "4px 10px",
+                borderRadius: "6px",
+                background: "rgba(34,197,94,0.12)",
+                color: "#4ade80",
+                border: "1px solid rgba(34,197,94,0.2)",
+                cursor: "pointer",
+                fontSize: "0.75rem",
+                fontWeight: 600,
+              }}
+            >
+              Chọn tất cả
+            </button>
+            <button
+              onClick={clearAll}
+              style={{
+                padding: "4px 10px",
+                borderRadius: "6px",
+                background: "rgba(255,255,255,0.04)",
+                color: "#94a3b8",
+                border: "1px solid rgba(255,255,255,0.08)",
+                cursor: "pointer",
+                fontSize: "0.75rem",
+                fontWeight: 600,
+              }}
+            >
+              Bỏ chọn
+            </button>
+          </div>
+
+          <div style={{ fontSize: "0.82rem", color: "var(--muted-foreground)" }}>
+            Đã chọn: <strong style={{ color: "#f1f5f9" }}>{selectedIds.size}</strong>/{unpaidRecords.length} trận · Tổng:{" "}
+            <strong style={{ color: selectedIds.size > 0 ? "#22c55e" : "var(--muted-foreground)" }}>
+              {formatCurrency(selectedTotal)}
+            </strong>
+          </div>
+        </div>
+      )}
+
+      {/* Records list với Checkbox trực tiếp */}
+      <div style={{ display: "flex", flexDirection: "column", gap: "10px", maxHeight: "400px", overflowY: "auto" }}>
         {unpaidRecords.length === 0 && (
           <div style={{ textAlign: "center", padding: "36px 0", color: "#4ade80" }}>
             <AlertCircle
@@ -114,31 +197,59 @@ export function UnpaidSection({
         {unpaidRecords.map((r) => {
           const cfg = RECORD_STATUS[r.status] ?? { label: r.status, color: "white" };
           const outstanding = r.amountRequired - r.amountPaid;
+          const isSelected = selectedIds.has(r.id);
+
           return (
             <div
               key={r.id}
+              onClick={() => toggleSelect(r.id)}
               style={{
                 display: "flex",
                 alignItems: "center",
                 gap: "12px",
-                padding: "12px",
+                padding: "12px 14px",
                 borderRadius: "10px",
-                background: "rgba(239,68,68,0.04)",
-                border: "1px solid rgba(239,68,68,0.08)",
+                background: isSelected ? "rgba(34,197,94,0.06)" : "rgba(239,68,68,0.04)",
+                border: isSelected ? "1px solid rgba(34,197,94,0.3)" : "1px solid rgba(239,68,68,0.08)",
+                cursor: "pointer",
+                transition: "all 0.15s",
+                userSelect: "none",
               }}
             >
+              {/* Checkbox trực tiếp trên danh sách */}
+              <div
+                style={{
+                  width: 20,
+                  height: 20,
+                  borderRadius: "5px",
+                  border: isSelected ? "2px solid #22c55e" : "2px solid #334155",
+                  background: isSelected ? "#22c55e" : "transparent",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  flexShrink: 0,
+                  transition: "all 0.15s",
+                }}
+              >
+                {isSelected && (
+                  <svg width="11" height="9" viewBox="0 0 11 9" fill="none">
+                    <path d="M1 4.5L4 7.5L10 1" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                )}
+              </div>
+
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div
                   style={{
                     fontSize: "0.85rem",
                     fontWeight: 700,
-                    color: "var(--card-foreground)",
+                    color: (r.note?.startsWith("Bạn") || r.note?.startsWith("Khách")) ? "#fb923c" : "var(--card-foreground)",
                     overflow: "hidden",
                     textOverflow: "ellipsis",
                     whiteSpace: "nowrap",
                   }}
                 >
-                  {r.session.title}
+                  {r.session.title} {r.note ? <span style={{ color: "#fb923c", fontWeight: 600 }}>({r.note.replace("Khách đi cùng", "Bạn").replace("Bạn đi cùng", "Bạn").replace("+", "")})</span> : ""}
                 </div>
                 <div
                   style={{
@@ -163,6 +274,7 @@ export function UnpaidSection({
                   )}
                 </div>
               </div>
+
               <div
                 style={{
                   textAlign: "right",
@@ -174,15 +286,17 @@ export function UnpaidSection({
                 }}
               >
                 <div
-                  style={{ fontSize: "0.9rem", fontWeight: 800, color: "#f87171" }}
+                  style={{ fontSize: "0.9rem", fontWeight: 800, color: isSelected ? "#22c55e" : "#f87171" }}
                 >
                   {formatCurrency(outstanding)}
                 </div>
                 {isAdmin && (
-                  <MarkPaidButton
-                    recordId={r.id}
-                    amountRequired={r.amountRequired}
-                  />
+                  <div onClick={(e) => e.stopPropagation()}>
+                    <MarkPaidButton
+                      recordId={r.id}
+                      amountRequired={r.amountRequired}
+                    />
+                  </div>
                 )}
               </div>
             </div>

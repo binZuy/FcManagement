@@ -36,13 +36,9 @@ function generateVietQRUrl(params: {
   return `${base}?${query.toString()}`;
 }
 
-// POST /api/payments/bundles — Tạo bundle thanh toán mới
+// POST /api/payments/bundles — Tạo bundle thanh toán mới (Cho phép cả khách & thành viên chưa đăng nhập)
 export async function POST(req: NextRequest) {
   try {
-    const session = await auth();
-    if (!session?.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
 
     const body = await req.json();
     const { memberId, recordIds } = body as {
@@ -83,7 +79,15 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 3. Cancel tất cả bundle PENDING cũ của member này
+    // 3. Giải phóng ràng buộc recordId unique bằng cách xóa các items cũ của bundle chưa thanh toán
+    await prisma.paymentBundleItem.deleteMany({
+      where: {
+        recordId: { in: recordIds },
+        bundle: { status: { not: BundleStatus.PAID } },
+      },
+    });
+
+    // Cancel tất cả bundle PENDING cũ của member này
     const oldBundles = await prisma.paymentBundle.findMany({
       where: { memberId, status: BundleStatus.PENDING },
       select: { id: true },

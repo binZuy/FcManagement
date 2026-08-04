@@ -1,5 +1,7 @@
 import { signIn } from "@/lib/auth";
 import { Metadata } from "next";
+import Link from "next/link";
+import { Home } from "lucide-react";
 
 export const metadata: Metadata = {
   title: "Đăng nhập — FC Manager",
@@ -54,6 +56,7 @@ export default function LoginPage() {
           width: "100%",
           padding: "48px 40px",
           textAlign: "center",
+          position: "relative",
         }}
       >
         {/* Logo */}
@@ -68,6 +71,7 @@ export default function LoginPage() {
             justifyContent: "center",
             margin: "0 auto 24px",
             fontSize: "32px",
+            boxShadow: "0 8px 20px rgba(34,197,94,0.3)",
           }}
         >
           ⚽
@@ -75,10 +79,10 @@ export default function LoginPage() {
 
         <h1
           style={{
-            fontSize: "1.75rem",
-            fontWeight: 700,
+            fontSize: "1.65rem",
+            fontWeight: 800,
             color: "var(--card-foreground)",
-            marginBottom: "8px",
+            marginBottom: "6px",
           }}
         >
           FC Manager
@@ -86,14 +90,12 @@ export default function LoginPage() {
         <p
           style={{
             color: "var(--muted-foreground)",
-            fontSize: "0.9rem",
-            marginBottom: "40px",
+            fontSize: "0.88rem",
+            marginBottom: "32px",
             lineHeight: 1.5,
           }}
         >
           Hệ thống quản lý đội bóng
-          <br />
-          Đăng nhập bằng tài khoản Google của bạn
         </p>
 
         <form
@@ -113,7 +115,7 @@ export default function LoginPage() {
               color: "#1f2937",
               border: "none",
               fontSize: "0.9rem",
-              fontWeight: 600,
+              fontWeight: 700,
               cursor: "pointer",
               display: "flex",
               alignItems: "center",
@@ -144,17 +146,34 @@ export default function LoginPage() {
           </button>
         </form>
 
+        {/* Nút về Dashboard phía dưới */}
+        <div style={{ marginTop: "24px", paddingTop: "20px", borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+          <Link
+            href="/"
+            style={{
+              color: "var(--primary)",
+              fontSize: "0.85rem",
+              fontWeight: 600,
+              textDecoration: "none",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "6px",
+            }}
+          >
+            <Home size={15} />
+            <span>Tiếp tục xem với vai trò Khách ➔</span>
+          </Link>
+        </div>
+
         <p
           style={{
-            marginTop: "24px",
-            fontSize: "0.78rem",
+            marginTop: "20px",
+            fontSize: "0.75rem",
             color: "var(--muted-foreground)",
-            lineHeight: 1.6,
+            lineHeight: 1.5,
           }}
         >
-          Chỉ các email được Admin cấp quyền mới có thể đăng nhập.
-          <br />
-          Liên hệ đội trưởng nếu bạn chưa có quyền truy cập.
+          Chỉ các email được Admin cấp quyền mới có thể đăng nhập
         </p>
       </div>
     </div>

@@ -1,10 +1,14 @@
 import { prisma } from "@/lib/prisma";
+import { auth } from "@/lib/auth";
 import { formatCurrency } from "@/lib/utils";
 import Link from "next/link";
 import { Wallet, Users, CheckCircle, AlertCircle, ChevronRight } from "lucide-react";
 import { RecordStatus } from "@prisma/client";
 
 export default async function PaymentsPage() {
+  const session = await auth();
+  const isAdmin = session?.user?.role === "ADMIN";
+
   const members = await prisma.member.findMany({
     include: {
       user: { select: { name: true, email: true, image: true } },
@@ -15,7 +19,6 @@ export default async function PaymentsPage() {
   });
 
   const memberStats = members.map((m) => {
-    // Unpaid records are those that are not PAID and not WAIVED
     const unpaidRecords = m.paymentRecords.filter(
       (r) => r.status !== RecordStatus.PAID && r.status !== RecordStatus.WAIVED
     );
@@ -29,7 +32,7 @@ export default async function PaymentsPage() {
     };
   });
 
-  // Sắp xếp: còn nợ lên đầu (nợ nhiều hơn đứng trước), đã xong xuống cuối
+  // Sắp xếp: còn khoản chưa đóng lên đầu
   const sortedMembers = memberStats.sort((a, b) => {
     if (a.debt > 0 && b.debt > 0) {
       return b.debt - a.debt;
@@ -52,52 +55,54 @@ export default async function PaymentsPage() {
             Quản lý Thu tiền theo thành viên
           </h1>
           <p style={{ color: "var(--muted-foreground)", fontSize: "0.9rem" }}>
-            Theo dõi chi tiết các khoản chưa đóng của từng thành viên
+            Theo dõi chi tiết các khoản phí của từng thành viên
           </p>
         </div>
       </div>
 
-      {/* Overview Stats Cards */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: "16px" }}>
-        <div className="stat-card">
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
-            <span style={{ fontSize: "0.85rem", color: "var(--muted-foreground)" }}>Tổng nợ chưa thu</span>
-            <Wallet size={20} color="#f87171" />
+      {/* Overview Stats Cards (Chỉ Admin mới hiển thị tổng quan tài chính) */}
+      {isAdmin && (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: "16px" }}>
+          <div className="stat-card">
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+              <span style={{ fontSize: "0.85rem", color: "var(--muted-foreground)" }}>[Admin] Tổng khoản cần thu</span>
+              <Wallet size={20} color="#f87171" />
+            </div>
+            <div style={{ fontSize: "1.5rem", fontWeight: 800, color: "#f87171" }}>
+              {formatCurrency(totalOwed)}
+            </div>
+            <div style={{ fontSize: "0.75rem", color: "var(--muted-foreground)", marginTop: "4px" }}>
+              Từ {membersWithDebt} thành viên chưa thanh toán đủ
+            </div>
           </div>
-          <div style={{ fontSize: "1.5rem", fontWeight: 800, color: "#f87171" }}>
-            {formatCurrency(totalOwed)}
-          </div>
-          <div style={{ fontSize: "0.75rem", color: "var(--muted-foreground)", marginTop: "4px" }}>
-            Từ {membersWithDebt} thành viên chưa đóng đủ
-          </div>
-        </div>
 
-        <div className="stat-card">
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
-            <span style={{ fontSize: "0.85rem", color: "var(--muted-foreground)" }}>Chưa hoàn thành</span>
-            <AlertCircle size={20} color="#facc15" />
+          <div className="stat-card">
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+              <span style={{ fontSize: "0.85rem", color: "var(--muted-foreground)" }}>Chưa hoàn thành</span>
+              <AlertCircle size={20} color="#facc15" />
+            </div>
+            <div style={{ fontSize: "1.5rem", fontWeight: 800, color: "#facc15" }}>
+              {membersWithDebt}
+            </div>
+            <div style={{ fontSize: "0.75rem", color: "var(--muted-foreground)", marginTop: "4px" }}>
+              Thành viên còn khoản phí cần thanh toán
+            </div>
           </div>
-          <div style={{ fontSize: "1.5rem", fontWeight: 800, color: "#facc15" }}>
-            {membersWithDebt}
-          </div>
-          <div style={{ fontSize: "0.75rem", color: "var(--muted-foreground)", marginTop: "4px" }}>
-            Thành viên còn khoản nợ cần thu
-          </div>
-        </div>
 
-        <div className="stat-card">
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
-            <span style={{ fontSize: "0.85rem", color: "var(--muted-foreground)" }}>Đã đóng đủ (Done)</span>
-            <CheckCircle size={20} color="#4ade80" />
-          </div>
-          <div style={{ fontSize: "1.5rem", fontWeight: 800, color: "#4ade80" }}>
-            {doneMembers}
-          </div>
-          <div style={{ fontSize: "0.75rem", color: "var(--muted-foreground)", marginTop: "4px" }}>
-            Thành viên đã hoàn thành tất cả các khoản
+          <div className="stat-card">
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+              <span style={{ fontSize: "0.85rem", color: "var(--muted-foreground)" }}>Đã hoàn thành (Done)</span>
+              <CheckCircle size={20} color="#4ade80" />
+            </div>
+            <div style={{ fontSize: "1.5rem", fontWeight: 800, color: "#4ade80" }}>
+              {doneMembers}
+            </div>
+            <div style={{ fontSize: "0.75rem", color: "var(--muted-foreground)", marginTop: "4px" }}>
+              Thành viên đã đóng đủ các khoản
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* Members List */}
       <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
@@ -165,12 +170,12 @@ export default async function PaymentsPage() {
                           color: hasDebt ? "#fb923c" : "#4ade80",
                           background: hasDebt ? "rgba(251,146,60,0.12)" : "rgba(34,197,94,0.12)",
                         }}>
-                          {hasDebt ? "Còn nợ" : "Đã xong"}
+                          {hasDebt ? "Chưa đóng" : "Đã xong"}
                         </span>
                       </div>
                       <div style={{ fontSize: "0.78rem", color: "var(--muted-foreground)", marginTop: "4px" }}>
-                        Mã CK: <strong style={{ color: "var(--primary)" }}>FCM {member.code}</strong>
-                        {hasDebt && ` · Nợ ${member.unpaidCount} trận`}
+                        Mã CK: <strong style={{ color: "var(--primary)" }}>{process.env.NEXT_PUBLIC_TRANSFER_PREFIX ?? "FCKX"} {member.code}</strong>
+                        {hasDebt && ` · Chưa đóng ${member.unpaidCount} trận`}
                       </div>
                     </div>
                   </div>
@@ -178,10 +183,10 @@ export default async function PaymentsPage() {
                   <div style={{ display: "flex", alignItems: "center", gap: "20px" }}>
                     <div style={{ textAlign: "right" }}>
                       <div style={{ fontSize: "1.15rem", fontWeight: 800, color: hasDebt ? "#f87171" : "#4ade80" }}>
-                        {hasDebt ? formatCurrency(member.debt) : "Đã đóng đủ"}
+                        {hasDebt ? formatCurrency(member.debt) : "Đã hoàn thành"}
                       </div>
                       <div style={{ fontSize: "0.72rem", color: "var(--muted-foreground)", marginTop: "2px" }}>
-                        {hasDebt ? "tổng nợ" : "không nợ nần"}
+                        {hasDebt ? "Cần thanh toán" : "Đã đóng đủ"}
                       </div>
                     </div>
                     <ChevronRight size={18} style={{ color: "var(--muted-foreground)", opacity: 0.5 }} />

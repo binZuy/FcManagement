@@ -1,98 +1,66 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
-import { MemberStatus, Position, Role } from "@prisma/client";
+import { Position } from "@prisma/client";
 
-type Params = { params: Promise<{ id: string }> };
+// PATCH /api/members/[id] — Chỉnh sửa thông tin profile thành viên
+export async function PATCH(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const session = await auth();
+    if (!session?.user) {
+      return NextResponse.json({ error: "Chưa đăng nhập" }, { status: 401 });
+    }
 
-// GET /api/members/:id — Member detail with full history
-export async function GET(_req: NextRequest, { params }: Params) {
+    const { id } = await params;
+    const member = await prisma.member.findUnique({
+      where: { id },
+      select: { id: true, userId: true },
+    });
 
+    if (!member) {
+      return NextResponse.json({ error: "Thành viên không tồn tại" }, { status: 404 });
+    }
 
-  const { id } = await params;
+    const isAdmin = session.user.role === "ADMIN";
+    const isOwner = session.user.id === member.userId;
 
-  const member = await prisma.member.findUnique({
-    where: { id },
-    include: {
-      user: { select: { id: true, name: true, email: true, image: true, phone: true } },
-      attendances: {
-        include: { match: true },
-        orderBy: { match: { matchDate: "desc" } },
-        take: 20,
-      },
-      paymentRecords: {
-        include: { session: true, sepayTx: true },
-        orderBy: { createdAt: "desc" },
-        take: 20,
-      },
-    },
-  });
+    if (!isAdmin && !isOwner) {
+      return NextResponse.json(
+        { error: "Bạn chỉ có thể chỉnh sửa profile của chính mình" },
+        { status: 403 }
+      );
+    }
 
-  if (!member) {
-    return NextResponse.json({ error: "Member not found" }, { status: 404 });
-  }
+    const body = await req.json();
+    const { name, phone, jerseyNumber, position, note } = body as {
+      name?: string;
+      phone?: string;
+      jerseyNumber?: number | null;
+      position?: Position | null;
+      note?: string | null;
+    };
 
-  return NextResponse.json({ data: member });
-}
-
-// PUT /api/members/:id — Update member (ADMIN only)
-export async function PUT(request: NextRequest, { params }: Params) {
-  const session = await auth();
-  if (!session?.user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-  if (session.user.role !== Role.ADMIN) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
-
-  const { id } = await params;
-  const body = await request.json();
-  const { name, phone, jerseyNumber, position, status, note } = body;
-
-  const member = await prisma.member.findUnique({
-    where: { id },
-    include: { user: true },
-  });
-  if (!member) {
-    return NextResponse.json({ error: "Member not found" }, { status: 404 });
-  }
-
-  const [updatedMember] = await prisma.$transaction([
-    prisma.member.update({
+    // Cập nhật User & Member
+    await prisma.member.update({
       where: { id },
       data: {
-        jerseyNumber: jerseyNumber !== undefined ? parseInt(jerseyNumber) : undefined,
-        position: position as Position | undefined,
-        status: status as MemberStatus | undefined,
-        note,
+        jerseyNumber: jerseyNumber !== undefined ? (jerseyNumber ? Number(jerseyNumber) : null) : undefined,
+        position: position !== undefined ? (position || null) : undefined,
+        note: note !== undefined ? note : undefined,
+        user: {
+          update: {
+            name: name !== undefined ? name : undefined,
+            phone: phone !== undefined ? phone : undefined,
+          },
+        },
       },
-      include: { user: true },
-    }),
-    prisma.user.update({
-      where: { id: member.userId },
-      data: { name, phone },
-    }),
-  ]);
+    });
 
-  return NextResponse.json({ data: updatedMember });
-}
-
-// DELETE /api/members/:id — Soft delete (set INACTIVE)
-export async function DELETE(_req: NextRequest, { params }: Params) {
-  const session = await auth();
-  if (!session?.user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return NextResponse.json({ success: true, message: "Cập nhật profile thành công!" });
+  } catch (err: any) {
+    return NextResponse.json({ error: err.message ?? "Lỗi máy chủ" }, { status: 500 });
   }
-  if (session.user.role !== Role.ADMIN) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
-
-  const { id } = await params;
-
-  await prisma.member.update({
-    where: { id },
-    data: { status: MemberStatus.INACTIVE },
-  });
-
-  return NextResponse.json({ success: true });
 }

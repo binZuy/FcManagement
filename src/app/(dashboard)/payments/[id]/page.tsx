@@ -214,7 +214,7 @@ export default async function MemberPaymentDetailPage({ params }: Params) {
               value: formatCurrency(totalPaidAmount),
             },
             {
-              label: "Nợ cần thu hiện tại",
+              label: "Cần thanh toán hiện tại",
               value: formatCurrency(totalDebtAmount),
               color: totalDebtAmount > 0 ? "#f87171" : "#4ade80",
             },
@@ -283,10 +283,22 @@ export default async function MemberPaymentDetailPage({ params }: Params) {
               gap: "8px",
             }}
           >
-            <CheckCircle size={18} color="#4ade80" /> Lịch sử đã thanh toán (Gần
-            nhất)
+            <CheckCircle size={18} color="#4ade80" /> Lịch sử đã thanh toán
           </h2>
-          <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+            {unpaidRecords.length === 0 && (
+              <div
+                style={{
+                  textAlign: "center",
+                  padding: "32px 0",
+                  color: "#4ade80",
+                  fontSize: "0.95rem",
+                  fontWeight: 700,
+                }}
+              >
+                Cảm ơn đã nộp vào quỹ nuôi Duy
+              </div>
+            )}
             {paidRecords.length === 0 && (
               <p
                 style={{

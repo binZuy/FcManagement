@@ -138,6 +138,7 @@ model MatchSession {
   feeDraw      Float?      // Phí hòa
   feeDefault   Float?      // Phí mặc định (nội bộ không chia đội)
   drinksFeeTotal Float?    // Tổng tiền nước của trận
+  feeSplitMethod String    @default("EQUAL") // EQUAL | LOSER_100 | LOSER_70_WINNER_30 | LOSER_60_WINNER_40
   status       MatchStatus @default(UPCOMING)
   note         String?     @db.Text
   createdAt    DateTime    @default(now())

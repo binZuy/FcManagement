@@ -35,7 +35,7 @@ export default function NewMatchPage() {
       });
 
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error || "Failed to create match");
+      if (!res.ok) throw new Error(json.error || "Không thể tạo trận đấu");
 
       router.push(`/matches/${json.data.id}`);
       router.refresh();
@@ -46,23 +46,23 @@ export default function NewMatchPage() {
   };
 
   return (
-    <div style={{ maxWidth: "600px", margin: "0 auto", display: "flex", flexDirection: "column", gap: "24px" }}>
-      <Link href="/matches" className="btn btn-secondary" style={{ alignSelf: "flex-start" }}>
-        <ArrowLeft size={16} /> Quay lại
+    <div style={{ maxWidth: "600px", margin: "0 auto", display: "flex", flexDirection: "column", gap: "20px" }}>
+      <Link href="/matches" className="btn btn-secondary" style={{ alignSelf: "flex-start", padding: "6px 12px", fontSize: "0.82rem" }}>
+        <ArrowLeft size={16} /> Quay lại danh sách
       </Link>
 
-      <div className="glass-card" style={{ padding: "32px" }}>
-        <h1 style={{ fontSize: "1.5rem", fontWeight: 800, marginBottom: "24px", color: "var(--card-foreground)" }}>
+      <div className="glass-card" style={{ padding: "20px" }}>
+        <h1 style={{ fontSize: "1.4rem", fontWeight: 800, marginBottom: "20px", color: "var(--card-foreground)" }}>
           Tạo trận bóng mới
         </h1>
 
         {error && (
-          <div style={{ padding: "12px", background: "rgba(239, 68, 68, 0.15)", color: "#f87171", borderRadius: "8px", marginBottom: "20px", fontSize: "0.9rem" }}>
+          <div style={{ padding: "10px 14px", background: "rgba(239, 68, 68, 0.15)", color: "#f87171", borderRadius: "8px", marginBottom: "16px", fontSize: "0.85rem" }}>
             {error}
           </div>
         )}
 
-        <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+        <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
           <div>
             <label className="form-label">Tên trận đấu *</label>
             <input
@@ -75,7 +75,7 @@ export default function NewMatchPage() {
             />
           </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "14px" }}>
             <div>
               <label className="form-label">Thời gian *</label>
               <input
@@ -90,6 +90,7 @@ export default function NewMatchPage() {
               <label className="form-label">Loại trận *</label>
               <select
                 className="form-input"
+                style={{ background: "#1e293b" }}
                 value={formData.matchType}
                 onChange={(e) => setFormData({ ...formData, matchType: e.target.value as MatchType })}
               >
@@ -113,7 +114,7 @@ export default function NewMatchPage() {
           )}
 
           <div>
-            <label className="form-label">Địa điểm</label>
+            <label className="form-label">Địa điểm sân bóng</label>
             <input
               type="text"
               className="form-input"
@@ -123,10 +124,8 @@ export default function NewMatchPage() {
             />
           </div>
 
-
-
-          <div style={{ marginTop: "12px", display: "flex", justifyContent: "flex-end" }}>
-            <button type="submit" disabled={loading} className="btn btn-primary" style={{ padding: "10px 24px" }}>
+          <div style={{ marginTop: "8px", display: "flex", justifyContent: "flex-end" }}>
+            <button type="submit" disabled={loading} className="btn btn-primary" style={{ padding: "10px 20px", fontWeight: 700 }}>
               {loading ? <Loader2 className="animate-spin" size={18} /> : <Save size={18} />}
               {loading ? "Đang tạo..." : "Tạo trận đấu"}
             </button>

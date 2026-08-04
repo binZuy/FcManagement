@@ -37,10 +37,35 @@ body {
   min-height: 100vh;
 }
 
-/* Scrollbar */
-::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+/* Main layout padding responsive */
+.main-layout-container {
+  padding: 24px;
+}
+
+@media (min-width: 769px) {
+  .mobile-only-cards {
+    display: none !important;
+  }
+}
+
+@media (max-width: 768px) {
+  .main-layout-container {
+    padding: 12px;
+  }
+  .desktop-only-table {
+    display: none !important;
+  }
+}
+
+@keyframes slideInRight {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
 }
 ::-webkit-scrollbar-track {
   background: var(--background);
