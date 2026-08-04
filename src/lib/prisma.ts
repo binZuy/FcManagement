@@ -4,12 +4,23 @@ import { PrismaClient } from "@prisma/client";
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
+  pool: Pool | undefined;
 };
 
 function createPrismaClient() {
-  const connectionString = process.env.DIRECT_URL ?? process.env.DATABASE_URL!;
+  // Luôn dùng DATABASE_URL (Connection Pooler) cho app runtime, KHÔNG dùng DIRECT_URL
+  const connectionString = process.env.DATABASE_URL!;
   
-  const pool = new Pool({ connectionString });
+  const pool =
+    globalForPrisma.pool ??
+    new Pool({
+      connectionString,
+      max: 1, // Giới hạn tối đa 1 connection cho mỗi serverless container trên Vercel
+      idleTimeoutMillis: 30000,
+      connectionTimeoutMillis: 10000,
+    });
+
+  globalForPrisma.pool = pool;
   const adapter = new PrismaPg(pool);
 
   return new PrismaClient({
@@ -23,4 +34,5 @@ function createPrismaClient() {
 
 export const prisma = globalForPrisma.prisma ?? createPrismaClient();
 
-if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
+globalForPrisma.prisma = prisma;
+
