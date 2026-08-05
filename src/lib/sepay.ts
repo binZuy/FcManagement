@@ -180,33 +180,37 @@ export async function processSepayTransaction(
 
   // ── Path A: Match theo Bundle (format mới) ─────────────────────────────────
   if (bundleCode) {
-    const bundle = await prisma.paymentBundle.findFirst({
+    let bundle = await prisma.paymentBundle.findFirst({
       where: {
-        bundleCode,
-        status: BundleStatus.PENDING,
-        ...(memberCode ? { member: { code: memberCode } } : {}),
+        bundleCode: { equals: bundleCode, mode: "insensitive" },
+        status: { not: BundleStatus.PAID },
       },
       include: {
         items: { include: { record: true } },
+        member: { select: { code: true } },
       },
     });
+
+    if (!bundle && memberCode) {
+      bundle = await prisma.paymentBundle.findFirst({
+        where: {
+          member: { code: { equals: memberCode, mode: "insensitive" } },
+          status: { not: BundleStatus.PAID },
+        },
+        orderBy: { createdAt: "desc" },
+        include: {
+          items: { include: { record: true } },
+          member: { select: { code: true } },
+        },
+      });
+    }
 
     if (!bundle) {
       console.warn(`[SePay] Bundle không tìm thấy: memberCode=${memberCode}, bundleCode=${bundleCode}`);
       return { matched: false, memberCode: memberCode ?? undefined, bundleCode };
     }
 
-    // Kiểm tra hết hạn
-    if (bundle.expiresAt && bundle.expiresAt < new Date()) {
-      await prisma.paymentBundle.update({
-        where: { id: bundle.id },
-        data: { status: BundleStatus.EXPIRED },
-      });
-      console.warn(`[SePay] Bundle hết hạn: ${bundleCode}`);
-      return { matched: false, memberCode: memberCode ?? undefined, bundleCode };
-    }
-
-    // Đánh dấu tất cả records trong bundle = PAID + bundle = PAID
+    // Cập nhật tất cả records trong bundle thành PAID và bundle thành PAID (dù đã quá hạn)
     await prisma.$transaction([
       ...bundle.items.map((item) =>
         prisma.paymentRecord.update({
@@ -232,13 +236,19 @@ export async function processSepayTransaction(
         data: {
           isMatched: true,
           matchedMemberId: bundle.memberId,
-          matchedBundleCode: bundleCode,
+          matchedMemberCode: bundle.member?.code ?? memberCode,
+          matchedBundleCode: bundle.bundleCode,
         },
       }),
     ]);
 
-    console.log(`[SePay] ✅ Bundle matched: ${bundleCode}, ${bundle.items.length} records PAID`);
-    return { matched: true, matchType: "bundle", memberCode: memberCode ?? undefined, bundleCode };
+    console.log(`[SePay] Khớp thành công Bundle: ${bundle.bundleCode} cho TV ${bundle.member?.code}`);
+    return {
+      matched: true,
+      matchType: "bundle",
+      memberCode: bundle.member?.code ?? memberCode ?? undefined,
+      bundleCode: bundle.bundleCode,
+    };
   }
 
   // ── Path B: Match theo Session (legacy format) ─────────────────────────────

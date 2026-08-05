@@ -1,4 +1,4 @@
-﻿import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { BundleStatus, RecordStatus } from "@prisma/client";
 
@@ -8,12 +8,11 @@ import { BundleStatus, RecordStatus } from "@prisma/client";
  */
 function generateBundleCode(): string {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-  const ts = Date.now().toString(36).slice(-3).toUpperCase();
-  let rand = "";
-  for (let i = 0; i < 4; i++) {
-    rand += chars.charAt(Math.floor(Math.random() * chars.length));
+  let code = "";
+  for (let i = 0; i < 6; i++) {
+    code += chars.charAt(Math.floor(Math.random() * chars.length));
   }
-  return ts + rand;
+  return code;
 }
 
 // POST /api/payments/bundles
