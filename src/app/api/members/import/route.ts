@@ -18,6 +18,7 @@ export async function POST(request: NextRequest) {
   const { members } = body as {
     members: Array<{
       name: string;
+      email?: string;
       phone?: string;
       jerseyNumber?: number;
       position?: Position;
@@ -39,14 +40,32 @@ export async function POST(request: NextRequest) {
         throw new Error("Tên là bắt buộc");
       }
 
-      // 1. Create User
-      const user = await prisma.user.create({
-        data: {
-          name: item.name,
-          phone: item.phone,
-          role: Role.MEMBER,
-        },
-      });
+      // Kiểm tra xem User với email này đã tồn tại chưa
+      let user;
+      if (item.email) {
+        user = await prisma.user.findUnique({ where: { email: item.email } });
+      }
+
+      // 1. Create or Use existing User
+      if (!user) {
+        user = await prisma.user.create({
+          data: {
+            name: item.name,
+            email: item.email || null,
+            phone: item.phone,
+            role: Role.MEMBER,
+          },
+        });
+      }
+
+      // Nếu có email, tự động thêm vào danh sách cho phép đăng nhập (Whitelist)
+      if (item.email) {
+        await prisma.allowedEmail.upsert({
+          where: { email: item.email },
+          update: { label: item.name },
+          create: { email: item.email, label: item.name },
+        });
+      }
 
       // 2. Generate or use Code
       let memberCode = item.code || generateMemberCode(item.name);

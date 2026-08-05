@@ -6,7 +6,7 @@ import Link from "next/link";
 import { ArrowLeft, Upload, FileSpreadsheet, AlertCircle, CheckCircle2 } from "lucide-react";
 import Papa from "papaparse";
 
-const TEMPLATE_HEADERS = ["Họ tên", "Số điện thoại", "Số áo", "Vị trí", "Mã (Tùy chọn)"];
+const TEMPLATE_HEADERS = ["Họ tên", "Email", "Số điện thoại", "Số áo", "Vị trí", "Mã (Tùy chọn)"];
 
 export default function MembersImportPage() {
   const router = useRouter();
@@ -47,9 +47,10 @@ export default function MembersImportPage() {
         // Map keys exactly matching our template
         const mapped = results.data.map((row: any) => ({
           name: row["Họ tên"]?.trim() || "",
+          email: row["Email"]?.trim() || "",
           phone: row["Số điện thoại"]?.trim() || "",
           jerseyNumber: row["Số áo"] ? parseInt(row["Số áo"]) : undefined,
-          position: row["Vị trí"]?.trim() || undefined, // expects GOALKEEPER, DEFENDER, MIDFIELDER, FORWARD (or translate if needed)
+          position: row["Vị trí"]?.trim() || undefined, // expects GOALKEEPER, DEFENDER, MIDFIELDER, FORWARD
           code: row["Mã (Tùy chọn)"]?.trim() || "",
         })).filter((row) => row.name); // require name
 
@@ -104,11 +105,11 @@ export default function MembersImportPage() {
 
       <div className="glass-card" style={{ padding: "32px" }}>
         <h1 style={{ fontSize: "1.5rem", fontWeight: 800, color: "var(--card-foreground)", marginBottom: "16px" }}>
-          Import Thành viên (CSV)
+          Import Thành viên
         </h1>
         
         <p style={{ color: "var(--muted-foreground)", marginBottom: "24px", lineHeight: 1.6 }}>
-          Tải file mẫu về, điền dữ liệu theo đúng cột và tải lên. Hệ thống sẽ tự động tạo danh sách cầu thủ.
+          Điền dữ liệu thành viên vào file mẫu để import.
         </p>
 
         <div style={{ display: "flex", gap: "12px", marginBottom: "32px" }}>
@@ -118,32 +119,30 @@ export default function MembersImportPage() {
           </button>
         </div>
 
-        <div 
+        <label 
           style={{ 
+            display: "block",
+            cursor: "pointer",
             border: "2px dashed var(--border)", 
             borderRadius: "12px", 
             padding: "40px", 
             textAlign: "center",
             background: "rgba(30, 41, 59, 0.3)",
-            marginBottom: "24px"
+            marginBottom: "24px",
+            transition: "background 0.2s ease"
           }}
         >
           <Upload size={32} style={{ margin: "0 auto 12px", color: "var(--primary)" }} />
           <div style={{ fontWeight: 600, color: "var(--card-foreground)", marginBottom: "8px" }}>
-            {file ? file.name : "Chọn file CSV từ máy tính"}
+            {file ? file.name : "Click vào đây để chọn file CSV"}
           </div>
           <input 
             type="file" 
             accept=".csv" 
             onChange={handleFileChange}
-            style={{ 
-              display: "block", 
-              margin: "0 auto", 
-              color: "var(--muted-foreground)",
-              fontSize: "0.9rem"
-            }} 
+            style={{ display: "none" }} 
           />
-        </div>
+        </label>
 
         {error && (
           <div style={{ padding: "12px 16px", borderRadius: "8px", background: "rgba(239,68,68,0.1)", color: "#ef4444", display: "flex", alignItems: "center", gap: "8px", marginBottom: "24px" }}>

@@ -6,7 +6,7 @@ import Link from "next/link";
 import { ArrowLeft, Upload, FileSpreadsheet, AlertCircle, CheckCircle2 } from "lucide-react";
 import Papa from "papaparse";
 
-const TEMPLATE_HEADERS = ["Tên trận", "Ngày (YYYY-MM-DD)", "Loại trận (INTERNAL/EXTERNAL)", "Đối thủ", "Kết quả (WIN/LOSE/DRAW)", "Mã điểm danh (cách nhau dấu phẩy)"];
+const TEMPLATE_HEADERS = ["Tên trận", "Ngày (YYYY-MM-DD)", "Loại trận (INTERNAL/EXTERNAL)", "Đối thủ", "Kết quả (WIN/LOSE/DRAW)", "Mã Đội A", "Mã Đội B", "Tổng tiền sân", "Tổng tiền nước"];
 
 export default function MatchesImportPage() {
   const router = useRouter();
@@ -51,7 +51,10 @@ export default function MatchesImportPage() {
           matchType: row["Loại trận (INTERNAL/EXTERNAL)"]?.trim() || undefined,
           opponentName: row["Đối thủ"]?.trim() || undefined,
           result: row["Kết quả (WIN/LOSE/DRAW)"]?.trim() || undefined,
-          attendanceCodes: row["Mã điểm danh (cách nhau dấu phẩy)"]?.trim() || "",
+          teamA_codes: row["Mã Đội A"]?.trim() || "",
+          teamB_codes: row["Mã Đội B"]?.trim() || "",
+          feeTotal: row["Tổng tiền sân"] ? parseFloat(row["Tổng tiền sân"]) : undefined,
+          drinksFeeTotal: row["Tổng tiền nước"] ? parseFloat(row["Tổng tiền nước"]) : undefined,
         })).filter((row) => row.title && row.matchDate);
 
         setPreview(mapped);
@@ -105,11 +108,11 @@ export default function MatchesImportPage() {
 
       <div className="glass-card" style={{ padding: "32px" }}>
         <h1 style={{ fontSize: "1.5rem", fontWeight: 800, color: "var(--card-foreground)", marginBottom: "16px" }}>
-          Import Lịch sử Trận (CSV)
+          Import Lịch sử Trận
         </h1>
         
         <p style={{ color: "var(--muted-foreground)", marginBottom: "24px", lineHeight: 1.6 }}>
-          Tải file mẫu về, điền các thông tin của trận bóng cũ và danh sách mã cầu thủ tham gia (cách nhau bằng dấu phẩy) để hệ thống tự động ghi nhận điểm danh.
+          Điền dữ liệu trận bóng và mã điểm danh (cách nhau dấu phẩy) vào file mẫu để import.
         </p>
 
         <div style={{ display: "flex", gap: "12px", marginBottom: "32px" }}>
@@ -119,32 +122,30 @@ export default function MatchesImportPage() {
           </button>
         </div>
 
-        <div 
+        <label 
           style={{ 
+            display: "block",
+            cursor: "pointer",
             border: "2px dashed var(--border)", 
             borderRadius: "12px", 
             padding: "40px", 
             textAlign: "center",
             background: "rgba(30, 41, 59, 0.3)",
-            marginBottom: "24px"
+            marginBottom: "24px",
+            transition: "background 0.2s ease"
           }}
         >
           <Upload size={32} style={{ margin: "0 auto 12px", color: "var(--primary)" }} />
           <div style={{ fontWeight: 600, color: "var(--card-foreground)", marginBottom: "8px" }}>
-            {file ? file.name : "Chọn file CSV từ máy tính"}
+            {file ? file.name : "Click vào đây để chọn file CSV"}
           </div>
           <input 
             type="file" 
             accept=".csv" 
             onChange={handleFileChange}
-            style={{ 
-              display: "block", 
-              margin: "0 auto", 
-              color: "var(--muted-foreground)",
-              fontSize: "0.9rem"
-            }} 
+            style={{ display: "none" }} 
           />
-        </div>
+        </label>
 
         {error && (
           <div style={{ padding: "12px 16px", borderRadius: "8px", background: "rgba(239,68,68,0.1)", color: "#ef4444", display: "flex", alignItems: "center", gap: "8px", marginBottom: "24px" }}>
@@ -171,7 +172,9 @@ export default function MatchesImportPage() {
                   <tr>
                     <th>Tên trận</th>
                     <th>Ngày</th>
-                    <th>Điểm danh</th>
+                    <th>Đội A</th>
+                    <th>Đội B</th>
+                    <th>Phí (Sân/Nước)</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -180,7 +183,13 @@ export default function MatchesImportPage() {
                       <td>{p.title}</td>
                       <td>{p.matchDate}</td>
                       <td style={{ fontSize: "0.8rem", color: "var(--muted-foreground)" }}>
-                        {p.attendanceCodes || "—"}
+                        {p.teamA_codes || "—"}
+                      </td>
+                      <td style={{ fontSize: "0.8rem", color: "var(--muted-foreground)" }}>
+                        {p.teamB_codes || "—"}
+                      </td>
+                      <td style={{ fontSize: "0.8rem", color: "var(--muted-foreground)" }}>
+                        {p.feeTotal ? `${p.feeTotal.toLocaleString()}đ` : "—"} / {p.drinksFeeTotal ? `${p.drinksFeeTotal.toLocaleString()}đ` : "—"}
                       </td>
                     </tr>
                   ))}

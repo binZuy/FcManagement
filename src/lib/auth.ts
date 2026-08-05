@@ -39,14 +39,34 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         
         let dbUser = await prisma.user.findUnique({
           where: { id: user.id },
-          select: { id: true, role: true },
+          include: { member: true },
         });
 
         if (dbUser && isAdminEmail && dbUser.role !== "ADMIN") {
           dbUser = await prisma.user.update({
             where: { id: user.id },
             data: { role: "ADMIN" },
-            select: { id: true, role: true },
+            include: { member: true },
+          });
+        }
+
+        // TỰ ĐỘNG TẠO MEMBER PROFILE NẾU CHƯA CÓ (áp dụng cho Admin và AllowedEmails)
+        if (dbUser && !dbUser.member) {
+          const { generateMemberCode } = await import("@/lib/utils");
+          let baseCode = generateMemberCode(dbUser.name || "MB");
+          let memberCode = baseCode;
+          let attempt = 0;
+          
+          while (await prisma.member.findUnique({ where: { code: memberCode } })) {
+            attempt++;
+            memberCode = `${baseCode}${attempt}`;
+          }
+
+          await prisma.member.create({
+            data: {
+              userId: dbUser.id,
+              code: memberCode,
+            }
           });
         }
 

@@ -3,21 +3,40 @@ import { prisma } from "@/lib/prisma";
 import { RecordStatus, PayMethod, BundleStatus } from "@prisma/client";
 
 /**
- * Verify SePay HMAC-SHA256 signature
+ * Verify SePay HMAC-SHA256 signature or Secret Token
  */
 export function verifySepaySignature(
   payload: string,
   signature: string,
   secret: string
 ): boolean {
-  const expected = crypto
-    .createHmac("sha256", secret)
-    .update(payload)
-    .digest("hex");
-  return crypto.timingSafeEqual(
-    Buffer.from(signature, "hex"),
-    Buffer.from(expected, "hex")
-  );
+  if (!signature || !secret) return false;
+
+  const cleanSignature = signature.replace(/^Bearer\s+/i, "").trim();
+  const cleanSecret = secret.trim();
+
+  // 1. Kiểm tra nếu SePay gửi Secret Token trực tiếp (x-sepay-secret hoặc Authorization: Bearer <secret>)
+  if (cleanSignature === cleanSecret) {
+    return true;
+  }
+
+  // 2. Kiểm tra HMAC SHA256 signature
+  try {
+    const expected = crypto
+      .createHmac("sha256", cleanSecret)
+      .update(payload)
+      .digest("hex");
+
+    const sigBuf = Buffer.from(cleanSignature, "hex");
+    const expBuf = Buffer.from(expected, "hex");
+
+    if (sigBuf.length !== expBuf.length) {
+      return false;
+    }
+    return crypto.timingSafeEqual(sigBuf, expBuf);
+  } catch {
+    return false;
+  }
 }
 
 export interface SepayPayload {
@@ -33,15 +52,9 @@ export interface SepayPayload {
   transferAmount: number;
   referenceCode: string;
   accumulated: number;
-  subAccumulated: number;
+  subAccumulated?: number;
 }
 
-/**
- * Kết quả parse nội dung chuyển khoản
- * Hỗ trợ 2 format:
- *  - Bundle (mới):  "FCKX NVA-A1B2C3"   → { memberCode: "NVA", bundleCode: "A1B2C3" }
- *  - Legacy (cũ):  "FCM NVA TS082026"   → { memberCode: "NVA", sessionCode: "TS082026" }
- */
 export interface ParsedContent {
   memberCode: string | null;
   bundleCode: string | null;    // format mới: bundle
@@ -49,24 +62,38 @@ export interface ParsedContent {
 }
 
 /**
- * Parse nội dung chuyển khoản
+ * Parse nội dung chuyển khoản linh hoạt:
+ * Hỗ trợ các trường hợp ngân hàng tự thêm tiền tố (VD: "140736621638-FCKTX AWU-GX83...")
  */
 export function parseSepayContent(content: string): ParsedContent {
+  if (!content) return { memberCode: null, bundleCode: null, sessionCode: null };
   const upper = content.toUpperCase().trim();
 
-  // Pattern 1 (mới - bundle): "FCKX NVA-A1B2C3"
-  // Prefix linh hoạt (FCK, FCKX, FcKTX...), sau đó space, rồi CODE-BUNDLECODE
-  const bundleMatch = upper.match(/^[A-Z]+\s+([A-Z]+)-([A-Z0-9]{4,8})(?:\s|$)/);
-  if (bundleMatch) {
+  // Pattern 1a (Bundle có gạch ngang): "... FCKTX NVA-A1B2C3 ..." hoặc "... FCK NVA-A1B2C3 ..."
+  const bundleDashMatch = upper.match(/(?:FCK|FCKTX|FCM|FC)\s+([A-Z0-9]+)-([A-Z0-9]{4,8})(?:\s|[^A-Z0-9]|$)/);
+  if (bundleDashMatch) {
     return {
-      memberCode: bundleMatch[1],
-      bundleCode: bundleMatch[2],
+      memberCode: bundleDashMatch[1],
+      bundleCode: bundleDashMatch[2],
       sessionCode: null,
     };
   }
 
-  // Pattern 2 (cũ - legacy): "FCM NVA TS082026"
-  const legacyMatch = upper.match(/FCM\s+([A-Z]+)\s+([A-Z0-9]+)/);
+  // Pattern 1b (Bundle không gạch ngang): "... FCKTX NVAA1B2C3 ..." hoặc "... FCKTX A1B2C3 ..."
+  const bundleDirectMatch = upper.match(/(?:FCK|FCKTX|FCM|FC)\s+([A-Z0-9]{4,16})(?:\s|[^A-Z0-9]|$)/);
+  if (bundleDirectMatch) {
+    const rawCode = bundleDirectMatch[1];
+    if (rawCode.length >= 7) {
+      const bundleCode = rawCode.slice(-6);
+      const memberCode = rawCode.slice(0, -6);
+      return { memberCode, bundleCode, sessionCode: null };
+    } else if (rawCode.length === 6) {
+      return { memberCode: null, bundleCode: rawCode, sessionCode: null };
+    }
+  }
+
+  // Pattern 2 (Legacy session): "... FCM NVA TS082026 ..."
+  const legacyMatch = upper.match(/FCM\s+([A-Z0-9]+)\s+([A-Z0-9]+)/);
   if (legacyMatch) {
     return {
       memberCode: legacyMatch[1],
@@ -94,8 +121,20 @@ export async function processSepayTransaction(
   sessionCode?: string;
 }> {
   const { memberCode, bundleCode, sessionCode } = parseSepayContent(
-    payload.content ?? ""
+    payload.content ?? payload.description ?? ""
   );
+
+  // Ép kiểu Date an toàn (tránh Invalid Date gây rớt Prisma)
+  let txDate = new Date();
+  if (payload.transactionDate) {
+    const formatted = payload.transactionDate.includes("T")
+      ? payload.transactionDate
+      : payload.transactionDate.replace(" ", "T");
+    const parsed = new Date(formatted);
+    if (!isNaN(parsed.getTime())) {
+      txDate = parsed;
+    }
+  }
 
   // 1. Lưu raw transaction (upsert để tránh trùng)
   const tx = await prisma.sepayTransaction.upsert({
@@ -103,12 +142,12 @@ export async function processSepayTransaction(
     update: {},
     create: {
       sepayId: String(payload.id),
-      gateway: payload.gateway,
-      accountNumber: payload.accountNumber,
-      transferAmount: payload.transferAmount,
-      content: payload.content,
-      referenceCode: payload.referenceCode,
-      transactionDate: new Date(payload.transactionDate),
+      gateway: payload.gateway ?? "UNKNOWN",
+      accountNumber: payload.accountNumber ?? "",
+      transferAmount: payload.transferAmount ?? 0,
+      content: payload.content ?? payload.description ?? "",
+      referenceCode: payload.referenceCode ?? "",
+      transactionDate: txDate,
       isMatched: false,
       matchedMemberCode: memberCode,
       matchedSessionCode: sessionCode,
@@ -118,12 +157,12 @@ export async function processSepayTransaction(
   });
 
   // ── Path A: Match theo Bundle (format mới) ─────────────────────────────────
-  if (memberCode && bundleCode) {
+  if (bundleCode) {
     const bundle = await prisma.paymentBundle.findFirst({
       where: {
         bundleCode,
-        member: { code: memberCode },
         status: BundleStatus.PENDING,
+        ...(memberCode ? { member: { code: memberCode } } : {}),
       },
       include: {
         items: { include: { record: true } },
@@ -132,7 +171,7 @@ export async function processSepayTransaction(
 
     if (!bundle) {
       console.warn(`[SePay] Bundle không tìm thấy: memberCode=${memberCode}, bundleCode=${bundleCode}`);
-      return { matched: false, memberCode, bundleCode };
+      return { matched: false, memberCode: memberCode ?? undefined, bundleCode };
     }
 
     // Kiểm tra hết hạn
@@ -142,12 +181,11 @@ export async function processSepayTransaction(
         data: { status: BundleStatus.EXPIRED },
       });
       console.warn(`[SePay] Bundle hết hạn: ${bundleCode}`);
-      return { matched: false, memberCode, bundleCode };
+      return { matched: false, memberCode: memberCode ?? undefined, bundleCode };
     }
 
     // Đánh dấu tất cả records trong bundle = PAID + bundle = PAID
     await prisma.$transaction([
-      // Mark từng record
       ...bundle.items.map((item) =>
         prisma.paymentRecord.update({
           where: { id: item.record.id },
@@ -159,7 +197,6 @@ export async function processSepayTransaction(
           },
         })
       ),
-      // Mark bundle = PAID
       prisma.paymentBundle.update({
         where: { id: bundle.id },
         data: {
@@ -168,7 +205,6 @@ export async function processSepayTransaction(
           sepayTxId: tx.sepayId,
         },
       }),
-      // Update transaction = matched
       prisma.sepayTransaction.update({
         where: { id: tx.id },
         data: {
@@ -179,8 +215,8 @@ export async function processSepayTransaction(
       }),
     ]);
 
-    console.log(`[SePay] ✅ Bundle matched: ${memberCode}-${bundleCode}, ${bundle.items.length} records PAID`);
-    return { matched: true, matchType: "bundle", memberCode, bundleCode };
+    console.log(`[SePay] ✅ Bundle matched: ${bundleCode}, ${bundle.items.length} records PAID`);
+    return { matched: true, matchType: "bundle", memberCode: memberCode ?? undefined, bundleCode };
   }
 
   // ── Path B: Match theo Session (legacy format) ─────────────────────────────
@@ -229,3 +265,4 @@ export async function processSepayTransaction(
 
   return { matched: false };
 }
+
