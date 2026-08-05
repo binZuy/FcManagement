@@ -126,8 +126,15 @@ export function QRPaymentDialog({
       } else if (data.bundle) {
         setBundleId(data.bundle.id);
         setBundleCode(data.bundle.bundleCode);
-        setQrContent(data.qrContent);
-        setQrUrl(data.qrUrl);
+        const content = data.qrContent || `${process.env.NEXT_PUBLIC_TRANSFER_PREFIX ?? "FCKX"} ${data.bundle.member?.code || ""}-${data.bundle.bundleCode}`;
+        setQrContent(content);
+
+        const bankBin = BANK_BIN || process.env.NEXT_PUBLIC_BANK_BIN || "";
+        const accountNo = ACCOUNT_NO || process.env.NEXT_PUBLIC_ACCOUNT_NO || "";
+        const clientQrUrl = (bankBin && accountNo)
+          ? buildClientQRUrl(bankBin, accountNo, process.env.NEXT_PUBLIC_ACCOUNT_NAME ?? "", data.bundle.totalAmount, content)
+          : null;
+        setQrUrl(clientQrUrl);
         setTotalAmount(data.bundle.totalAmount);
         setExpiresAt(new Date(data.bundle.expiresAt));
       }
@@ -223,6 +230,28 @@ export function QRPaymentDialog({
     } catch { }
   };
 
+const BANK_APP_MAP: Record<string, string> = {
+  "970422": "mb",        // MBBank
+  "970436": "vcb",       // Vietcombank
+  "970415": "icb",       // VietinBank
+  "970418": "bidv",      // BIDV
+  "970407": "tcb",       // Techcombank
+  "970432": "vpb",       // VPBank
+  "970416": "acb",       // ACB
+  "970423": "tpb",       // TPBank
+  "970437": "hdb",       // HDBank
+  "970403": "stb",       // Sacombank
+  "970441": "vib",       // VIB
+  "970443": "shb",       // SHB
+  "970431": "exb",       // Eximbank
+  "970426": "msb",       // MSB
+  "970405": "agb",       // Agribank
+  "970429": "scb",       // SCB
+  "970448": "ocb",       // OCB
+  "970440": "seab",      // SeABank
+  "970449": "lpb",       // LPBank
+};
+
   const handleSaveQR = async () => {
     if (!qrUrl) return;
     setSaveStatus("saving");
@@ -243,8 +272,13 @@ export function QRPaymentDialog({
         img.onerror = () => reject(new Error("img load failed"));
         img.src = qrUrl;
       });
+
       const file = new File([blob], fileName, { type: "image/png" });
+      const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+
+      // Trên Mobile: ưu tiên mở Share sheet
       if (
+        isMobile &&
         typeof navigator.share === "function" &&
         typeof navigator.canShare === "function" &&
         navigator.canShare({ files: [file] })
@@ -257,10 +291,10 @@ export function QRPaymentDialog({
           setSaveStatus("saved");
           setTimeout(() => setSaveStatus("idle"), 3000);
           return;
-        } catch (e: any) {
-          if (e?.name === "AbortError") { setSaveStatus("idle"); return; }
-        }
+        } catch { /* ignore user cancel */ }
       }
+
+      // Trên Máy tính (Web): tải file trực tiếp, không mở Share dialog thừa
       const blobUrl = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = blobUrl;
@@ -268,7 +302,8 @@ export function QRPaymentDialog({
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-      setTimeout(() => URL.revokeObjectURL(blobUrl), 2000);
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 3000);
+
       setSaveStatus("saved");
       setTimeout(() => setSaveStatus("idle"), 3000);
     } catch {
@@ -281,8 +316,10 @@ export function QRPaymentDialog({
   const handleOpenBankApp = () => {
     if (!BANK_BIN || !ACCOUNT_NO) return;
     const encodedContent = encodeURIComponent(qrContent);
-    const encodedName = encodeURIComponent("FC Management");
-    const url = `https://vietqr.io/pay?bankBin=${BANK_BIN}&bankNumber=${ACCOUNT_NO}&amount=${totalAmount}&content=${encodedContent}&name=${encodedName}`;
+    const encodedName = encodeURIComponent(process.env.NEXT_PUBLIC_ACCOUNT_NAME || "FC Management");
+    const appCode = BANK_APP_MAP[BANK_BIN] || "mb";
+    // Cú pháp chuẩn VietQR Deeplink: https://dl.vietqr.io/pay?app=<APP>&ba=<ACCOUNT>@<BIN>&am=<AMOUNT>&tn=<NOTE>&bn=<NAME>
+    const url = `https://dl.vietqr.io/pay?app=${appCode}&ba=${ACCOUNT_NO}@${BANK_BIN}&am=${totalAmount}&tn=${encodedContent}&bn=${encodedName}`;
     window.open(url, "_blank", "noopener,noreferrer");
   };
 
@@ -422,6 +459,7 @@ export function QRPaymentDialog({
                           onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
                         />
                       </div>
+                      <span style={{ fontSize: "0.68rem", color: "#64748b" }}>(Mẹo: Có thể nhấn giữ vào ảnh để lưu nhanh)</span>
 
                       {/* 2-column action buttons */}
                       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", width: "100%", maxWidth: "300px" }}>

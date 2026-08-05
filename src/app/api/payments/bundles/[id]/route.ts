@@ -49,7 +49,10 @@ export async function GET(_req: NextRequest, { params }: Params) {
     });
   }
 
-  return NextResponse.json({ bundle, expired: false });
+  const prefix = process.env.NEXT_PUBLIC_TRANSFER_PREFIX ?? "FCKX";
+  const qrContent = `${prefix} ${bundle.member.code}-${bundle.bundleCode}`;
+
+  return NextResponse.json({ bundle, qrContent, expired: false });
 }
 
 // DELETE /api/payments/bundles/[id] — Cancel bundle
