@@ -14,8 +14,9 @@ export async function POST(request: NextRequest) {
         request.headers.get("authorization") ||
         request.headers.get("x-sepay-secret") ||
         "";
+      const timestamp = request.headers.get("x-sepay-timestamp") || "";
 
-      if (!verifySepaySignature(rawBody, signature, webhookSecret)) {
+      if (!verifySepaySignature(rawBody, signature, webhookSecret, timestamp)) {
         console.error("[SePay Webhook] Invalid signature / secret token");
         return NextResponse.json(
           { success: false, message: "Invalid signature" },

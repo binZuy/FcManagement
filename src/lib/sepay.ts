@@ -4,36 +4,58 @@ import { RecordStatus, PayMethod, BundleStatus } from "@prisma/client";
 
 /**
  * Verify SePay HMAC-SHA256 signature or Secret Token
+ * Standard SePay HMAC spec:
+ * - Header X-SePay-Signature: sha256=<hex>
+ * - Header X-SePay-Timestamp: <unix_seconds>
+ * - Sign String: `${timestamp}.${payload}`
  */
 export function verifySepaySignature(
   payload: string,
   signature: string,
-  secret: string
+  secret: string,
+  timestamp?: string
 ): boolean {
   if (!signature || !secret) return false;
 
-  const cleanSignature = signature.replace(/^Bearer\s+/i, "").trim();
+  const cleanSignature = signature
+    .replace(/^sha256=/i, "")
+    .replace(/^Bearer\s+/i, "")
+    .trim();
   const cleanSecret = secret.trim();
 
-  // 1. Kiểm tra nếu SePay gửi Secret Token trực tiếp (x-sepay-secret hoặc Authorization: Bearer <secret>)
+  // 1. Direct Secret Token / API Key check
   if (cleanSignature === cleanSecret) {
     return true;
   }
 
-  // 2. Kiểm tra HMAC SHA256 signature
+  // 2. HMAC SHA256 validation (with timestamp support)
   try {
+    const dataToSign = timestamp ? `${timestamp}.${payload}` : payload;
     const expected = crypto
       .createHmac("sha256", cleanSecret)
-      .update(payload)
+      .update(dataToSign)
       .digest("hex");
 
     const sigBuf = Buffer.from(cleanSignature, "hex");
     const expBuf = Buffer.from(expected, "hex");
 
-    if (sigBuf.length !== expBuf.length) {
-      return false;
+    if (sigBuf.length === expBuf.length && crypto.timingSafeEqual(sigBuf, expBuf)) {
+      return true;
     }
-    return crypto.timingSafeEqual(sigBuf, expBuf);
+
+    // Fallback try without timestamp
+    if (timestamp) {
+      const fallbackExpected = crypto
+        .createHmac("sha256", cleanSecret)
+        .update(payload)
+        .digest("hex");
+      const fallbackExpBuf = Buffer.from(fallbackExpected, "hex");
+      if (sigBuf.length === fallbackExpBuf.length && crypto.timingSafeEqual(sigBuf, fallbackExpBuf)) {
+        return true;
+      }
+    }
+
+    return false;
   } catch {
     return false;
   }
