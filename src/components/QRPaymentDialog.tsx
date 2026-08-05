@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import {
@@ -10,6 +10,8 @@ import {
   Clock,
   AlertCircle,
   Zap,
+  Download,
+  Smartphone,
 } from "lucide-react";
 
 interface QRPaymentDialogProps {
@@ -22,8 +24,8 @@ interface QRPaymentDialogProps {
 
 type DialogStep = "qr" | "success";
 
-const POLL_INTERVAL_MS = 5000; // 5 giây poll 1 lần
-const BUNDLE_TTL_MS = 30 * 60 * 1000; // 30 phút
+const POLL_INTERVAL_MS = 5000;
+const BUNDLE_TTL_MS = 30 * 60 * 1000;
 
 function formatCurrency(amount: number): string {
   return new Intl.NumberFormat("vi-VN", {
@@ -33,7 +35,7 @@ function formatCurrency(amount: number): string {
 }
 
 function formatCountdown(ms: number): string {
-  if (ms <= 0) return "Hết hạn";
+  if (ms <= 0) return "Het han";
   const minutes = Math.floor(ms / 60000);
   const seconds = Math.floor((ms % 60000) / 1000);
   return `${minutes}:${seconds.toString().padStart(2, "0")}`;
@@ -51,8 +53,8 @@ export function QRPaymentDialog({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
 
-  // Bundle state
   const [bundleId, setBundleId] = useState<string | null>(null);
   const [bundleCode, setBundleCode] = useState<string | null>(null);
   const [bundleStatus, setBundleStatus] = useState<string | null>(null);
@@ -66,8 +68,9 @@ export function QRPaymentDialog({
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const STORAGE_KEY = `active_qr_bundle_${memberId}`;
+  const BANK_BIN = process.env.NEXT_PUBLIC_BANK_BIN ?? "";
+  const ACCOUNT_NO = process.env.NEXT_PUBLIC_ACCOUNT_NO ?? "";
 
-  // Cleanup khi đóng dialog
   const cleanup = useCallback(() => {
     if (pollRef.current) clearInterval(pollRef.current);
     if (countdownRef.current) clearInterval(countdownRef.current);
@@ -75,21 +78,10 @@ export function QRPaymentDialog({
 
   const handleClose = useCallback(async () => {
     cleanup();
-    try {
-      localStorage.removeItem(STORAGE_KEY);
-    } catch {
-      // Ignore
-    }
-
-    // Cancel bundle chỉ khi đang ở trạng thái PENDING
+    try { localStorage.removeItem(STORAGE_KEY); } catch { }
     if (bundleId && step === "qr" && bundleStatus === "PENDING") {
-      try {
-        await fetch(`/api/payments/bundles/${bundleId}`, { method: "DELETE" });
-      } catch {
-        // Bỏ qua lỗi cancel
-      }
+      try { await fetch(`/api/payments/bundles/${bundleId}`, { method: "DELETE" }); } catch { }
     }
-
     setOpen(false);
     setStep("qr");
     setError(null);
@@ -99,31 +91,25 @@ export function QRPaymentDialog({
     setQrContent("");
     setQrUrl(null);
     setExpiresAt(null);
+    setSaveStatus("idle");
   }, [bundleId, step, bundleStatus, cleanup, STORAGE_KEY]);
 
-  // Polling & Status Check
   const checkStatusNow = useCallback(async (id: string) => {
     try {
       const res = await fetch(`/api/payments/bundles/${id}`);
       const data = await res.json();
       const status = data.bundle?.status;
-      // Luôn cập nhật status thực tế từ server
       if (status) setBundleStatus(status);
       if (status === "PAID") {
         cleanup();
-        try {
-          localStorage.removeItem(STORAGE_KEY);
-        } catch {}
+        try { localStorage.removeItem(STORAGE_KEY); } catch {}
         setStep("success");
         setTimeout(() => window.location.reload(), 2500);
       } else if (status === "EXPIRED" || status === "CANCELLED") {
         cleanup();
-        try {
-          localStorage.removeItem(STORAGE_KEY);
-        } catch {}
-        setError("Mã QR đã hết hạn hoặc bị hủy. Vui lòng đóng và tạo lại.");
+        try { localStorage.removeItem(STORAGE_KEY); } catch {}
+        setError("Ma QR da het han hoac bi huy. Vui long dong va tao lai.");
       } else if (data.bundle) {
-        // Restore/Update bundle state nếu khôi phục từ Storage
         setBundleId(data.bundle.id);
         setBundleCode(data.bundle.bundleCode);
         setQrContent(data.qrContent);
@@ -131,9 +117,7 @@ export function QRPaymentDialog({
         setTotalAmount(data.bundle.totalAmount);
         setExpiresAt(new Date(data.bundle.expiresAt));
       }
-    } catch {
-      // Bỏ qua lỗi mạng tạm thời
-    }
+    } catch { }
   }, [cleanup, STORAGE_KEY]);
 
   const startPolling = useCallback((id: string) => {
@@ -141,7 +125,6 @@ export function QRPaymentDialog({
     pollRef.current = setInterval(() => checkStatusNow(id), POLL_INTERVAL_MS);
   }, [checkStatusNow]);
 
-  // Tự động khôi phục QR đang chờ (PENDING) khi Mount/Reload lại trang
   useEffect(() => {
     try {
       const savedBundleId = localStorage.getItem(STORAGE_KEY);
@@ -152,21 +135,14 @@ export function QRPaymentDialog({
         checkStatusNow(savedBundleId).finally(() => setLoading(false));
         startPolling(savedBundleId);
       }
-    } catch {
-      // Ignore localStorage errors
-    }
+    } catch { }
   }, [STORAGE_KEY, checkStatusNow, startPolling]);
 
-  // Tự động check khẩn cấp khi người dùng quay lại tab/trình duyệt từ App Ngân Hàng
   useEffect(() => {
     if (!open || !bundleId || step !== "qr") return;
-
     const handleVisibilityChange = () => {
-      if (document.visibilityState === "visible" && bundleId) {
-        checkStatusNow(bundleId);
-      }
+      if (document.visibilityState === "visible" && bundleId) checkStatusNow(bundleId);
     };
-
     window.addEventListener("visibilitychange", handleVisibilityChange);
     window.addEventListener("focus", handleVisibilityChange);
     return () => {
@@ -175,10 +151,8 @@ export function QRPaymentDialog({
     };
   }, [open, bundleId, step, checkStatusNow]);
 
-  // Countdown timer
   useEffect(() => {
     if (!open || step !== "qr" || !expiresAt) return;
-
     const tick = () => {
       const remaining = expiresAt.getTime() - Date.now();
       setCountdown(Math.max(0, remaining));
@@ -189,19 +163,16 @@ export function QRPaymentDialog({
     };
     tick();
     countdownRef.current = setInterval(tick, 1000);
-    return () => {
-      if (countdownRef.current) clearInterval(countdownRef.current);
-    };
+    return () => { if (countdownRef.current) clearInterval(countdownRef.current); };
   }, [open, step, expiresAt]);
 
-  // Mở Dialog và gọi API tạo QR ngay lập tức
   const handleOpenAndGenerateQR = async () => {
     if (selectedRecordIds.length === 0) return;
     setOpen(true);
     setStep("qr");
     setLoading(true);
     setError(null);
-
+    setSaveStatus("idle");
     try {
       const res = await fetch("/api/payments/bundles", {
         method: "POST",
@@ -209,8 +180,7 @@ export function QRPaymentDialog({
         body: JSON.stringify({ memberId, recordIds: selectedRecordIds }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Có lỗi xảy ra khi tạo QR");
-
+      if (!res.ok) throw new Error(data.error ?? "Co loi xay ra khi tao QR");
       setBundleId(data.bundle.id);
       setBundleCode(data.bundle.bundleCode);
       setBundleStatus(data.bundle.status ?? "PENDING");
@@ -218,15 +188,10 @@ export function QRPaymentDialog({
       setQrUrl(data.qrUrl);
       setTotalAmount(data.bundle.totalAmount);
       setExpiresAt(new Date(data.bundle.expiresAt));
-
-      // Lưu trạng thái QR đang chờ vào localStorage
-      try {
-        localStorage.setItem(STORAGE_KEY, data.bundle.id);
-      } catch {}
-
+      try { localStorage.setItem(STORAGE_KEY, data.bundle.id); } catch {}
       startPolling(data.bundle.id);
     } catch (err: any) {
-      setError(err.message ?? "Có lỗi xảy ra");
+      setError(err.message ?? "Co loi xay ra");
     } finally {
       setLoading(false);
     }
@@ -237,22 +202,30 @@ export function QRPaymentDialog({
       await navigator.clipboard.writeText(qrContent);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
-    } catch {
-      // Fallback
-    }
+    } catch { }
   };
 
-  const handleDownloadQR = async () => {
+  const handleSaveQR = async () => {
     if (!qrUrl) return;
+    setSaveStatus("saving");
     const fileName = `QR_ThanhToan_${memberCode}_${bundleCode || "FC"}.png`;
-
     try {
-      const response = await fetch(qrUrl);
-      if (!response.ok) throw new Error("fetch failed");
-      const blob = await response.blob();
+      const blob = await new Promise<Blob>((resolve, reject) => {
+        const img = new Image();
+        img.crossOrigin = "anonymous";
+        img.onload = () => {
+          const canvas = document.createElement("canvas");
+          canvas.width = img.naturalWidth || 300;
+          canvas.height = img.naturalHeight || 300;
+          const ctx = canvas.getContext("2d");
+          if (!ctx) { reject(new Error("no ctx")); return; }
+          ctx.drawImage(img, 0, 0);
+          canvas.toBlob((b) => { if (b) resolve(b); else reject(new Error("toBlob failed")); }, "image/png");
+        };
+        img.onerror = () => reject(new Error("img load failed"));
+        img.src = qrUrl;
+      });
       const file = new File([blob], fileName, { type: "image/png" });
-
-      // Web Share API (mobile): thử share file trước
       if (
         typeof navigator.share === "function" &&
         typeof navigator.canShare === "function" &&
@@ -261,18 +234,15 @@ export function QRPaymentDialog({
         try {
           await navigator.share({
             files: [file],
-            title: "Ảnh QR Thanh Toán",
-            text: `Mã thanh toán ${bundleCode || ""}`,
+            title: "QR Thanh Toan FC",
           });
+          setSaveStatus("saved");
+          setTimeout(() => setSaveStatus("idle"), 3000);
           return;
-        } catch (shareErr: any) {
-          // Người dùng huỷ share (AbortError) hoặc lỗi khác → fallback download
-          if (shareErr?.name === "AbortError") return;
-          // fallthrough to download
+        } catch (e: any) {
+          if (e?.name === "AbortError") { setSaveStatus("idle"); return; }
         }
       }
-
-      // Fallback: tải xuống chuẩn (desktop & mobile browser)
       const blobUrl = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = blobUrl;
@@ -280,18 +250,32 @@ export function QRPaymentDialog({
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-      setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 2000);
+      setSaveStatus("saved");
+      setTimeout(() => setSaveStatus("idle"), 3000);
     } catch {
-      // Last resort: mở ảnh trong tab mới để user tự lưu
       window.open(qrUrl, "_blank");
+      setSaveStatus("error");
+      setTimeout(() => setSaveStatus("idle"), 3000);
     }
   };
 
+  const handleOpenBankApp = () => {
+    if (!BANK_BIN || !ACCOUNT_NO) return;
+    const encodedContent = encodeURIComponent(qrContent);
+    const encodedName = encodeURIComponent("FC Management");
+    const url = `https://vietqr.io/pay?bankBin=${BANK_BIN}&bankNumber=${ACCOUNT_NO}&amount=${totalAmount}&content=${encodedContent}&name=${encodedName}`;
+    window.open(url, "_blank", "noopener,noreferrer");
+  };
+
   const isExpired = countdown <= 0;
+  const saveLabel = saveStatus === "idle" ? "Luu anh QR"
+    : saveStatus === "saving" ? "Dang luu..."
+    : saveStatus === "saved" ? "Da luu!"
+    : "Giu anh de luu";
 
   return (
     <>
-      {/* Trigger Button */}
       <button
         onClick={handleOpenAndGenerateQR}
         disabled={selectedRecordIds.length === 0}
@@ -300,508 +284,221 @@ export function QRPaymentDialog({
           alignItems: "center",
           gap: "8px",
           padding: "10px 20px",
-          background:
-            selectedRecordIds.length === 0
-              ? "rgba(34,197,94,0.12)"
-              : "linear-gradient(135deg, #16a34a, #22c55e)",
+          background: selectedRecordIds.length === 0
+            ? "rgba(34,197,94,0.12)"
+            : "linear-gradient(135deg, #16a34a, #22c55e)",
           color: selectedRecordIds.length === 0 ? "var(--muted-foreground)" : "white",
           border: "none",
           borderRadius: "10px",
-          fontSize: "0.9rem",
+          fontSize: "0.88rem",
           fontWeight: 700,
           cursor: selectedRecordIds.length === 0 ? "not-allowed" : "pointer",
           transition: "all 0.2s",
-          boxShadow:
-            selectedRecordIds.length > 0
-              ? "0 4px 15px rgba(34,197,94,0.3)"
-              : "none",
+          boxShadow: selectedRecordIds.length > 0 ? "0 4px 15px rgba(34,197,94,0.3)" : "none",
+          whiteSpace: "nowrap",
         }}
       >
-        <Zap size={16} />
+        <Zap size={15} />
         {selectedRecordIds.length > 0
-          ? `Tạo QR Thanh Toán (${formatCurrency(selectedTotalAmount)})`
-          : "Vui lòng chọn trận cần đóng"}
+          ? `Tao QR (${formatCurrency(selectedTotalAmount)})`
+          : "Chon tran can dong"}
       </button>
 
-      {/* Modal Overlay */}
       {open && (
         <div
           style={{
             position: "fixed",
             inset: 0,
-            background: "rgba(0,0,0,0.75)",
-            backdropFilter: "blur(6px)",
-            zIndex: 1000,
+            background: "rgba(0,0,0,0.82)",
+            backdropFilter: "blur(8px)",
+            zIndex: 9999,
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            padding: "16px",
-            animation: "fadeIn 0.2s ease",
+            padding: "12px",
           }}
-          onClick={(e) => {
-            if (e.target === e.currentTarget) handleClose();
-          }}
+          onClick={(e) => { if (e.target === e.currentTarget) handleClose(); }}
         >
           <div
             style={{
-              background: "#111827",
-              border: "1px solid rgba(34,197,94,0.2)",
-              borderRadius: "16px",
+              background: "#0f172a",
+              border: "1px solid rgba(34,197,94,0.25)",
+              borderRadius: "20px",
               width: "100%",
-              maxWidth: "440px",
-              maxHeight: "90vh",
+              maxWidth: "420px",
+              maxHeight: "92dvh",
               overflow: "hidden",
               display: "flex",
               flexDirection: "column",
-              boxShadow:
-                "0 25px 60px rgba(0,0,0,0.5), 0 0 0 1px rgba(34,197,94,0.1)",
+              boxShadow: "0 30px 80px rgba(0,0,0,0.6)",
             }}
           >
             {/* Header */}
             <div
               style={{
-                padding: "20px 24px",
+                padding: "14px 18px",
                 borderBottom: "1px solid rgba(255,255,255,0.06)",
                 display: "flex",
                 justifyContent: "space-between",
                 alignItems: "center",
                 background: "rgba(34,197,94,0.04)",
+                flexShrink: 0,
               }}
             >
               <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                <div
-                  style={{
-                    width: 36,
-                    height: 36,
-                    borderRadius: "10px",
-                    background: "rgba(34,197,94,0.15)",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}
-                >
-                  <QrCode size={18} color="#22c55e" />
+                <div style={{ width: 34, height: 34, borderRadius: "10px", background: "rgba(34,197,94,0.15)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                  <QrCode size={17} color="#22c55e" />
                 </div>
                 <div>
-                  <div
-                    style={{
-                      fontWeight: 700,
-                      color: "#f1f5f9",
-                      fontSize: "0.95rem",
-                    }}
-                  >
-                    {step === "qr" && "Quét QR để thanh toán"}
-                    {step === "success" && "Thanh toán thành công!"}
+                  <div style={{ fontWeight: 700, color: "#f1f5f9", fontSize: "0.9rem" }}>
+                    {step === "qr" ? "Quet QR de thanh toan" : "Thanh toan thanh cong!"}
                   </div>
-                  <div
-                    style={{
-                      fontSize: "0.75rem",
-                      color: "#64748b",
-                      marginTop: "2px",
-                    }}
-                  >
+                  <div style={{ fontSize: "0.72rem", color: "#64748b", marginTop: "1px" }}>
                     {memberName} · {memberCode}
                   </div>
                 </div>
               </div>
               <button
                 onClick={handleClose}
-                style={{
-                  width: 32,
-                  height: 32,
-                  borderRadius: "8px",
-                  background: "rgba(255,255,255,0.05)",
-                  border: "1px solid rgba(255,255,255,0.08)",
-                  color: "#94a3b8",
-                  cursor: "pointer",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
+                style={{ width: 32, height: 32, borderRadius: "8px", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)", color: "#94a3b8", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}
               >
                 <X size={16} />
               </button>
             </div>
 
-            {/* Content */}
-            <div style={{ flex: 1, overflowY: "auto", padding: "24px" }}>
+            {/* Scrollable Content */}
+            <div style={{ flex: 1, overflowY: "auto", padding: "18px 14px" }}>
               {loading ? (
-                <div
-                  style={{
-                    padding: "40px 0",
-                    display: "flex",
-                    flexDirection: "column",
-                    alignItems: "center",
-                    gap: "12px",
-                    color: "#94a3b8",
-                  }}
-                >
+                <div style={{ padding: "40px 0", display: "flex", flexDirection: "column", alignItems: "center", gap: "12px", color: "#94a3b8" }}>
                   <Loader2 size={32} style={{ animation: "spin 1s linear infinite", color: "#22c55e" }} />
-                  <span style={{ fontSize: "0.9rem", fontWeight: 600 }}>Đang khởi tạo mã QR thanh toán...</span>
+                  <span style={{ fontSize: "0.88rem", fontWeight: 600 }}>Dang khoi tao ma QR...</span>
                 </div>
               ) : error ? (
-                <div
-                  style={{
-                    padding: "20px",
-                    borderRadius: "10px",
-                    background: "rgba(239,68,68,0.08)",
-                    border: "1px solid rgba(239,68,68,0.2)",
-                    color: "#f87171",
-                    textAlign: "center",
-                    fontSize: "0.85rem",
-                    display: "flex",
-                    flexDirection: "column",
-                    alignItems: "center",
-                    gap: "10px",
-                  }}
-                >
+                <div style={{ padding: "20px", borderRadius: "12px", background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.2)", color: "#f87171", textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center", gap: "10px" }}>
                   <AlertCircle size={28} />
-                  <span>{error}</span>
-                  <button
-                    onClick={handleOpenAndGenerateQR}
-                    style={{
-                      marginTop: "8px",
-                      padding: "6px 14px",
-                      borderRadius: "6px",
-                      background: "rgba(239,68,68,0.2)",
-                      border: "1px solid rgba(239,68,68,0.3)",
-                      color: "#f87171",
-                      cursor: "pointer",
-                      fontSize: "0.8rem",
-                      fontWeight: 700,
-                    }}
-                  >
-                    Thử lại
+                  <span style={{ fontSize: "0.85rem" }}>{error}</span>
+                  <button onClick={handleOpenAndGenerateQR} style={{ padding: "6px 14px", borderRadius: "6px", background: "rgba(239,68,68,0.2)", border: "1px solid rgba(239,68,68,0.3)", color: "#f87171", cursor: "pointer", fontSize: "0.8rem", fontWeight: 700 }}>
+                    Thu lai
                   </button>
                 </div>
               ) : step === "qr" ? (
-                <div
-                  style={{
-                    display: "flex",
-                    flexDirection: "column",
-                    alignItems: "center",
-                    gap: "20px",
-                  }}
-                >
+                <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "14px" }}>
                   {/* Countdown */}
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "8px",
-                      padding: "8px 16px",
-                      borderRadius: "999px",
-                      background: isExpired
-                        ? "rgba(239,68,68,0.1)"
-                        : "rgba(234,179,8,0.1)",
-                      border: isExpired
-                        ? "1px solid rgba(239,68,68,0.25)"
-                        : "1px solid rgba(234,179,8,0.25)",
-                    }}
-                  >
-                    <Clock size={14} color={isExpired ? "#f87171" : "#facc15"} />
-                    <span
-                      style={{
-                        fontSize: "0.8rem",
-                        fontWeight: 700,
-                        color: isExpired ? "#f87171" : "#facc15",
-                      }}
-                    >
-                      {isExpired
-                        ? "QR đã hết hạn"
-                        : `Hết hạn sau: ${formatCountdown(countdown)}`}
+                  <div style={{ display: "flex", alignItems: "center", gap: "6px", padding: "5px 14px", borderRadius: "999px", background: isExpired ? "rgba(239,68,68,0.1)" : "rgba(234,179,8,0.1)", border: isExpired ? "1px solid rgba(239,68,68,0.25)" : "1px solid rgba(234,179,8,0.25)" }}>
+                    <Clock size={13} color={isExpired ? "#f87171" : "#facc15"} />
+                    <span style={{ fontSize: "0.78rem", fontWeight: 700, color: isExpired ? "#f87171" : "#facc15" }}>
+                      {isExpired ? "QR da het han" : `Het han sau: ${formatCountdown(countdown)}`}
                     </span>
                   </div>
 
                   {/* QR Image */}
                   {qrUrl ? (
-                    <div
-                      style={{
-                        display: "flex",
-                        flexDirection: "column",
-                        alignItems: "center",
-                        gap: "12px",
-                      }}
-                    >
-                      <div
-                        style={{
-                          padding: "12px",
-                          background: "white",
-                          borderRadius: "16px",
-                          boxShadow:
-                            "0 0 0 1px rgba(34,197,94,0.3), 0 8px 30px rgba(0,0,0,0.4)",
-                        }}
-                      >
+                    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "10px", width: "100%" }}>
+                      <div style={{ padding: "10px", background: "white", borderRadius: "14px", boxShadow: "0 0 0 1px rgba(34,197,94,0.3), 0 8px 30px rgba(0,0,0,0.4)" }}>
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img
                           src={qrUrl}
-                          alt="QR thanh toán"
-                          style={{ width: 220, height: 220, display: "block" }}
-                          onError={(e) => {
-                            (e.currentTarget as HTMLImageElement).style.display =
-                              "none";
-                          }}
+                          alt="QR thanh toan"
+                          crossOrigin="anonymous"
+                          style={{ width: 190, height: 190, display: "block" }}
+                          onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
                         />
                       </div>
 
-                      {/* Action Buttons: App Direct Link & Download QR Image */}
-                      <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", justifyContent: "center" }}>
-                        <a
-                          href={`https://dl.vietqr.io/pay?app=${process.env.NEXT_PUBLIC_BANK_BIN}&ba=${process.env.NEXT_PUBLIC_ACCOUNT_NO}&am=${totalAmount}&tn=${encodeURIComponent(qrContent)}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          style={{
-                            display: "inline-flex",
-                            alignItems: "center",
-                            gap: "6px",
-                            padding: "8px 14px",
-                            borderRadius: "8px",
-                            background: "rgba(34,197,94,0.12)",
-                            border: "1px solid rgba(34,197,94,0.3)",
-                            color: "#4ade80",
-                            textDecoration: "none",
-                            fontSize: "0.8rem",
-                            fontWeight: 700,
-                            cursor: "pointer",
-                            transition: "all 0.2s",
-                          }}
-                        >
-                          📱 Mở App Ngân Hàng
-                        </a>
-
+                      {/* 2-column action buttons */}
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", width: "100%", maxWidth: "300px" }}>
                         <button
-                          onClick={handleDownloadQR}
+                          onClick={handleOpenBankApp}
+                          disabled={!BANK_BIN || !ACCOUNT_NO}
                           style={{
-                            display: "inline-flex",
-                            alignItems: "center",
-                            gap: "6px",
-                            padding: "8px 14px",
-                            borderRadius: "8px",
-                            background: "rgba(255,255,255,0.06)",
-                            border: "1px solid rgba(255,255,255,0.12)",
-                            color: "#f1f5f9",
-                            fontSize: "0.8rem",
-                            fontWeight: 700,
-                            cursor: "pointer",
-                            transition: "all 0.2s",
+                            display: "flex", alignItems: "center", justifyContent: "center", gap: "5px",
+                            padding: "9px 6px", borderRadius: "10px",
+                            background: (!BANK_BIN || !ACCOUNT_NO) ? "rgba(34,197,94,0.05)" : "rgba(34,197,94,0.14)",
+                            border: "1px solid rgba(34,197,94,0.3)",
+                            color: (!BANK_BIN || !ACCOUNT_NO) ? "#475569" : "#4ade80",
+                            fontSize: "0.76rem", fontWeight: 700,
+                            cursor: (!BANK_BIN || !ACCOUNT_NO) ? "not-allowed" : "pointer",
                           }}
                         >
-                          📥 Tải ảnh QR
+                          <Smartphone size={13} />
+                          Mo App NH
+                        </button>
+                        <button
+                          onClick={handleSaveQR}
+                          disabled={saveStatus === "saving"}
+                          style={{
+                            display: "flex", alignItems: "center", justifyContent: "center", gap: "5px",
+                            padding: "9px 6px", borderRadius: "10px",
+                            background: saveStatus === "saved" ? "rgba(34,197,94,0.15)" : saveStatus === "error" ? "rgba(239,68,68,0.1)" : "rgba(255,255,255,0.07)",
+                            border: saveStatus === "saved" ? "1px solid rgba(34,197,94,0.4)" : saveStatus === "error" ? "1px solid rgba(239,68,68,0.3)" : "1px solid rgba(255,255,255,0.12)",
+                            color: saveStatus === "saved" ? "#4ade80" : saveStatus === "error" ? "#f87171" : "#e2e8f0",
+                            fontSize: "0.76rem", fontWeight: 700,
+                            cursor: saveStatus === "saving" ? "wait" : "pointer",
+                          }}
+                        >
+                          {saveStatus === "saving" ? <Loader2 size={13} style={{ animation: "spin 1s linear infinite" }} /> : <Download size={13} />}
+                          {saveLabel}
                         </button>
                       </div>
                     </div>
                   ) : (
-                    <div
-                      style={{
-                        width: 220,
-                        height: 220,
-                        borderRadius: "16px",
-                        background: "rgba(30,41,59,0.6)",
-                        border: "2px dashed rgba(34,197,94,0.2)",
-                        display: "flex",
-                        flexDirection: "column",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        gap: "8px",
-                        color: "#64748b",
-                      }}
-                    >
-                      <QrCode size={40} />
-                      <span
-                        style={{ fontSize: "0.78rem", textAlign: "center" }}
-                      >
-                        Chưa cấu hình thông tin ngân hàng
-                      </span>
+                    <div style={{ width: 190, height: 190, borderRadius: "14px", background: "rgba(30,41,59,0.6)", border: "2px dashed rgba(34,197,94,0.2)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "8px", color: "#64748b" }}>
+                      <QrCode size={36} />
+                      <span style={{ fontSize: "0.72rem", textAlign: "center", padding: "0 12px" }}>Chua cau hinh ngan hang</span>
                     </div>
                   )}
 
                   {/* Amount */}
                   <div style={{ textAlign: "center" }}>
-                    <div
-                      style={{
-                        fontSize: "0.78rem",
-                        color: "#64748b",
-                        marginBottom: "4px",
-                      }}
-                    >
-                      Số tiền cần chuyển
-                    </div>
-                    <div
-                      style={{
-                        fontSize: "1.8rem",
-                        fontWeight: 900,
-                        color: "#22c55e",
-                        letterSpacing: "-0.5px",
-                      }}
-                    >
+                    <div style={{ fontSize: "0.72rem", color: "#64748b", marginBottom: "2px" }}>So tien can chuyen</div>
+                    <div style={{ fontSize: "1.6rem", fontWeight: 900, color: "#22c55e", letterSpacing: "-0.5px" }}>
                       {formatCurrency(totalAmount)}
                     </div>
                   </div>
 
                   {/* Transfer Content */}
                   <div style={{ width: "100%" }}>
-                    <div
-                      style={{
-                        fontSize: "0.75rem",
-                        color: "#64748b",
-                        marginBottom: "6px",
-                        textAlign: "center",
-                      }}
-                    >
-                      Nội dung chuyển khoản (bắt buộc đúng)
+                    <div style={{ fontSize: "0.7rem", color: "#64748b", marginBottom: "5px", textAlign: "center" }}>
+                      Noi dung chuyen khoan (bat buoc dung)
                     </div>
-                    <div
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "8px",
-                        padding: "12px 16px",
-                        borderRadius: "10px",
-                        background: "rgba(34,197,94,0.06)",
-                        border: "1px solid rgba(34,197,94,0.2)",
-                      }}
-                    >
-                      <code
-                        style={{
-                          flex: 1,
-                          fontSize: "1rem",
-                          fontWeight: 800,
-                          color: "#22c55e",
-                          fontFamily: "monospace",
-                          letterSpacing: "1px",
-                          wordBreak: "break-all",
-                        }}
-                      >
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px", padding: "9px 12px", borderRadius: "10px", background: "rgba(34,197,94,0.06)", border: "1px solid rgba(34,197,94,0.2)" }}>
+                      <code style={{ flex: 1, fontSize: "0.92rem", fontWeight: 800, color: "#22c55e", fontFamily: "monospace", letterSpacing: "1px", wordBreak: "break-all" }}>
                         {qrContent}
                       </code>
                       <button
                         onClick={handleCopyContent}
-                        style={{
-                          padding: "6px 10px",
-                          borderRadius: "6px",
-                          background: copied
-                            ? "rgba(34,197,94,0.2)"
-                            : "rgba(255,255,255,0.06)",
-                          border: "1px solid rgba(255,255,255,0.1)",
-                          color: copied ? "#22c55e" : "#94a3b8",
-                          cursor: "pointer",
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "4px",
-                          fontSize: "0.75rem",
-                          fontWeight: 600,
-                          transition: "all 0.15s",
-                          flexShrink: 0,
-                        }}
+                        style={{ padding: "5px 9px", borderRadius: "6px", background: copied ? "rgba(34,197,94,0.2)" : "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", color: copied ? "#22c55e" : "#94a3b8", cursor: "pointer", display: "flex", alignItems: "center", gap: "4px", fontSize: "0.7rem", fontWeight: 600, flexShrink: 0 }}
                       >
-                        {copied ? (
-                          <CheckCircle size={13} />
-                        ) : (
-                          <Copy size={13} />
-                        )}
-                        {copied ? "Đã copy" : "Copy"}
+                        {copied ? <CheckCircle size={12} /> : <Copy size={12} />}
+                        {copied ? "Da copy" : "Copy"}
                       </button>
                     </div>
                   </div>
 
-                  {/* Waiting indicator */}
+                  {/* Waiting */}
                   {!isExpired && (
-                    <div
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "8px",
-                        padding: "10px 16px",
-                        borderRadius: "8px",
-                        background: "rgba(234,179,8,0.05)",
-                        border: "1px solid rgba(234,179,8,0.15)",
-                        width: "100%",
-                        justifyContent: "center",
-                      }}
-                    >
-                      <Loader2
-                        size={14}
-                        color="#facc15"
-                        style={{ animation: "spin 1s linear infinite" }}
-                      />
-                      <span style={{ fontSize: "0.8rem", color: "#facc15" }}>
-                        Đang chờ nhận thanh toán...
-                      </span>
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px", padding: "8px 14px", borderRadius: "8px", background: "rgba(234,179,8,0.05)", border: "1px solid rgba(234,179,8,0.15)", width: "100%", justifyContent: "center" }}>
+                      <Loader2 size={13} color="#facc15" style={{ animation: "spin 1s linear infinite" }} />
+                      <span style={{ fontSize: "0.76rem", color: "#facc15" }}>Dang cho nhan thanh toan...</span>
                     </div>
                   )}
 
-                  {/* Bundle info */}
-                  <div
-                    style={{
-                      fontSize: "0.7rem",
-                      color: "#334155",
-                      textAlign: "center",
-                    }}
-                  >
-                    Bundle: <code style={{ color: "#475569" }}>{bundleCode}</code>{" "}
-                    · Bao gồm {selectedRecordIds.length} khoản
+                  <div style={{ fontSize: "0.66rem", color: "#334155", textAlign: "center" }}>
+                    Bundle: <code style={{ color: "#475569" }}>{bundleCode}</code> · {selectedRecordIds.length} khoan
                   </div>
                 </div>
               ) : (
-                /* STEP SUCCESS */
-                <div
-                  style={{
-                    display: "flex",
-                    flexDirection: "column",
-                    alignItems: "center",
-                    gap: "20px",
-                    padding: "20px 0",
-                    textAlign: "center",
-                  }}
-                >
-                  <div
-                    style={{
-                      width: 80,
-                      height: 80,
-                      borderRadius: "50%",
-                      background: "rgba(34,197,94,0.15)",
-                      border: "2px solid rgba(34,197,94,0.4)",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      animation: "pulse-green 2s infinite",
-                    }}
-                  >
+                <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "20px", padding: "20px 0", textAlign: "center" }}>
+                  <div style={{ width: 80, height: 80, borderRadius: "50%", background: "rgba(34,197,94,0.15)", border: "2px solid rgba(34,197,94,0.4)", display: "flex", alignItems: "center", justifyContent: "center" }}>
                     <CheckCircle size={40} color="#22c55e" />
                   </div>
                   <div>
-                    <div
-                      style={{
-                        fontSize: "1.3rem",
-                        fontWeight: 800,
-                        color: "#f1f5f9",
-                        marginBottom: "8px",
-                      }}
-                    >
-                      🎉 Đã nhận thanh toán!
-                    </div>
-                    <div
-                      style={{
-                        fontSize: "0.9rem",
-                        color: "#4ade80",
-                        fontWeight: 700,
-                        marginBottom: "4px",
-                      }}
-                    >
-                      {formatCurrency(totalAmount)}
-                    </div>
-                    <div style={{ fontSize: "0.8rem", color: "#64748b" }}>
-                      {selectedRecordIds.length} khoản đã được đánh dấu PAID
-                    </div>
+                    <div style={{ fontSize: "1.3rem", fontWeight: 800, color: "#f1f5f9", marginBottom: "8px" }}>Da nhan thanh toan!</div>
+                    <div style={{ fontSize: "0.9rem", color: "#4ade80", fontWeight: 700, marginBottom: "4px" }}>{formatCurrency(totalAmount)}</div>
+                    <div style={{ fontSize: "0.8rem", color: "#64748b" }}>{selectedRecordIds.length} khoan da PAID</div>
                   </div>
-                  <div style={{ fontSize: "0.75rem", color: "#475569" }}>
-                    Trang sẽ tự động làm mới...
-                  </div>
-                  <Loader2
-                    size={18}
-                    color="#334155"
-                    style={{ animation: "spin 1s linear infinite" }}
-                  />
+                  <div style={{ fontSize: "0.75rem", color: "#475569" }}>Trang se tu dong lam moi...</div>
+                  <Loader2 size={18} color="#334155" style={{ animation: "spin 1s linear infinite" }} />
                 </div>
               )}
             </div>

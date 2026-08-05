@@ -88,36 +88,39 @@ export function UnpaidSection({
       <div
         style={{
           display: "flex",
-          alignItems: "center",
+          alignItems: "flex-start",
           justifyContent: "space-between",
           flexWrap: "wrap",
-          gap: "12px",
+          gap: "10px",
           marginBottom: "16px",
         }}
       >
         <h2
           style={{
-            fontSize: "1.05rem",
+            fontSize: "1rem",
             fontWeight: 700,
             color: totalDebt > 0 ? "#f87171" : "var(--card-foreground)",
             display: "flex",
             alignItems: "center",
             gap: "8px",
+            margin: 0,
           }}
         >
-          <AlertCircle size={18} />
-          Các trận/khoản chưa đóng ({unpaidRecords.length})
+          <AlertCircle size={17} />
+          Cac tran/khoan chua dong ({unpaidRecords.length})
         </h2>
 
-        {/* Action Button: Tạo QR trực tiếp từ danh sách chọn */}
+        {/* Action Button: full-width tren mobile */}
         {unpaidRecords.length > 0 && (
-          <QRPaymentDialog
-            memberId={memberId}
-            memberCode={memberCode}
-            memberName={memberName}
-            selectedRecordIds={Array.from(selectedIds)}
-            selectedTotalAmount={selectedTotal}
-          />
+          <div style={{ width: "100%" }}>
+            <QRPaymentDialog
+              memberId={memberId}
+              memberCode={memberCode}
+              memberName={memberName}
+              selectedRecordIds={Array.from(selectedIds)}
+              selectedTotalAmount={selectedTotal}
+            />
+          </div>
         )}
       </div>
 
@@ -128,50 +131,50 @@ export function UnpaidSection({
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
-            padding: "10px 14px",
+            padding: "9px 12px",
             borderRadius: "8px",
             background: "rgba(30, 41, 59, 0.4)",
             border: "1px solid rgba(255,255,255,0.06)",
             marginBottom: "14px",
             flexWrap: "wrap",
-            gap: "8px",
+            gap: "6px",
           }}
         >
-          <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+          <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
             <button
               onClick={selectAll}
               style={{
-                padding: "4px 10px",
+                padding: "4px 9px",
                 borderRadius: "6px",
                 background: "rgba(34,197,94,0.12)",
                 color: "#4ade80",
                 border: "1px solid rgba(34,197,94,0.2)",
                 cursor: "pointer",
-                fontSize: "0.75rem",
+                fontSize: "0.72rem",
                 fontWeight: 600,
               }}
             >
-              Chọn tất cả
+              Chon tat ca
             </button>
             <button
               onClick={clearAll}
               style={{
-                padding: "4px 10px",
+                padding: "4px 9px",
                 borderRadius: "6px",
                 background: "rgba(255,255,255,0.04)",
                 color: "#94a3b8",
                 border: "1px solid rgba(255,255,255,0.08)",
                 cursor: "pointer",
-                fontSize: "0.75rem",
+                fontSize: "0.72rem",
                 fontWeight: 600,
               }}
             >
-              Bỏ chọn
+              Bo chon
             </button>
           </div>
 
-          <div style={{ fontSize: "0.82rem", color: "var(--muted-foreground)" }}>
-            Đã chọn: <strong style={{ color: "#f1f5f9" }}>{selectedIds.size}</strong>/{unpaidRecords.length} trận · Tổng:{" "}
+          <div style={{ fontSize: "0.78rem", color: "var(--muted-foreground)", whiteSpace: "nowrap" }}>
+            <strong style={{ color: "#f1f5f9" }}>{selectedIds.size}</strong>/{unpaidRecords.length} ·{" "}
             <strong style={{ color: selectedIds.size > 0 ? "#22c55e" : "var(--muted-foreground)" }}>
               {formatCurrency(selectedTotal)}
             </strong>
