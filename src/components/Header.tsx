@@ -53,7 +53,7 @@ export function Header({
       }}
     >
       {/* Góc trái: Nút Toggle Sidebar + Nút Home + Breadcrumbs */}
-      <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "nowrap", overflow: "hidden", minWidth: 0 }}>
 
         {/* 1. NÚT TOGGLE MENU SIDEBAR (Thu nhỏ/Mở rộng trên Web & Bật/Tắt Menu trên Mobile) */}
         <button
@@ -101,7 +101,7 @@ export function Header({
 
         {/* 3. BREADCRUMBS TÊN TRANG */}
         {segments.length > 0 && (
-          <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "0.82rem", color: "var(--muted-foreground)", flexWrap: "nowrap", overflow: "hidden" }}>
+          <div style={{ display: "flex", alignItems: "center", fontSize: "0.82rem", color: "var(--muted-foreground)", flexWrap: "nowrap", overflow: "hidden" }}>
             <ChevronRight size={14} opacity={0.4} style={{ flexShrink: 0 }} />
             {segments.map((segment, idx) => {
               const url = "/" + segments.slice(0, idx + 1).join("/");
@@ -114,7 +114,7 @@ export function Header({
               }
 
               return (
-                <div key={url} style={{ display: "flex", alignItems: "center", gap: "6px", flexShrink: 0 }}>
+                <div key={url} style={{ display: "flex", alignItems: "center", flexShrink: 0 }}>
                   {isLast ? (
                     <span
                       style={{

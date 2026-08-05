@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, CheckCircle, Save, Users, Trophy, Coffee, Search, CheckSquare, Square, UserCheck, Loader2 } from "lucide-react";
 import { showToast } from "@/components/Toast";
+import { FEE_SPLIT_METHOD, FEE_SPLIT_METHOD_LABELS } from "@/lib/constants";
 
 // Custom Counter Component to replace ugly browser spinners
 function Counter({ value, onChange, min = 0, max = 99, disabled = false }: {
@@ -230,8 +231,8 @@ export default function MatchEditPage({ params }: Params) {
   const totalGuestsCount = Object.values(attendances).reduce((sum, a) => sum + (a.status === "ATTENDED" ? (a.guestCount || 0) : 0), 0);
   const totalDrinksCount = Object.values(attendances).filter((a) => a.status === "ATTENDED" && a.isDrinks).length;
 
-  // 1. LUỒNG 1: CHỈ LƯU ĐIỂM DANH (Giữ nguyên trạng thái UPCOMING, chưa tạo phiên tính tiền)
-  const handleSaveAttendanceOnly = async () => {
+  // 1. LUỒNG 1: LƯU THAY ĐỔI / ĐIỂM DANH NHÁP (Giữ nguyên trạng thái UPCOMING, chưa đổi DONE, chưa tạo phiên tính tiền)
+  const handleSaveDraft = async () => {
     setSavingAttendance(true);
     try {
       const attendancesArray = Object.values(attendances).map((att) => ({
@@ -261,10 +262,10 @@ export default function MatchEditPage({ params }: Params) {
         }),
       });
 
-      showToast.success("Đã lưu thông tin điểm danh thành công!");
+      showToast.success("Đã lưu!");
       router.refresh();
     } catch (err: any) {
-      showToast.error("Lỗi khi lưu điểm danh: " + err.message);
+      showToast.error("Lỗi lưu: " + err.message);
     } finally {
       setSavingAttendance(false);
     }
@@ -274,25 +275,25 @@ export default function MatchEditPage({ params }: Params) {
   const handleFinalizeMatch = async () => {
     // Validation 1: Bắt buộc điểm danh ít nhất 1 người
     if (totalAttendedCount === 0) {
-      showToast.error("Vui lòng điểm danh ít nhất 1 thành viên có mặt trước khi đóng trận!");
+      showToast.error("Chưa điểm danh thành viên nào!");
       return;
     }
 
     // Validation 2: Bắt buộc chọn kết quả trận đấu
     if (!result) {
-      showToast.error("Vui lòng chọn Kết quả trận đấu (Thắng / Thua / Hòa) trước khi đóng trận!");
+      showToast.error("Chưa chọn kết quả trận!");
       return;
     }
 
     // Validation 3: Bắt buộc nhập tổng tiền sân
     if (!feeTotal || parseFloat(feeTotal) <= 0) {
-      showToast.error("Vui lòng nhập Tổng tiền sân trước khi đóng trận!");
+      showToast.error("Chưa nhập tiền sân!");
       return;
     }
 
     // Validation 4: Bắt buộc nhập tiền nước nếu có thành viên uống nước
     if (totalDrinksCount > 0 && (!drinksFeeTotal || parseFloat(drinksFeeTotal) <= 0)) {
-      showToast.error(`Có ${totalDrinksCount} thành viên ở lại uống nước, vui lòng nhập Tổng hóa đơn tiền nước!`);
+      showToast.error("Chưa nhập tiền nước!");
       return;
     }
 
@@ -341,52 +342,54 @@ export default function MatchEditPage({ params }: Params) {
         body: JSON.stringify({}),
       });
 
-      showToast.success("Đóng trận & Tạo phiên thu tiền thành công! 🎉");
+      showToast.success("Chốt sổ thành công! 🎉");
       router.push(`/matches/${id}`);
       router.refresh();
     } catch (err: any) {
-      showToast.error("Lỗi khi đóng trận: " + err.message);
+      showToast.error("Lỗi chốt sổ: " + err.message);
     } finally {
       setSavingFinalize(false);
     }
   };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "24px", maxWidth: "920px", margin: "0 auto" }}>
-      {/* Header action bar với 2 NÚT RÚT GỌN NẰM CÙNG 1 DÒNG CẢ MOBILE VÀ WEB */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px" }}>
-        <Link href={`/matches/${id}`} className="btn btn-secondary" style={{ padding: "6px 10px", fontSize: "0.78rem" }}>
-          <ArrowLeft size={15} /> Quay lại
-        </Link>
+    <div style={{ display: "flex", flexDirection: "column", gap: "20px", maxWidth: "920px", margin: "0 auto" }}>
+      {/* Header section với khoảng cách gần, hợp lý cả mobile và web */}
+      <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px" }}>
+          <Link href={`/matches/${id}`} className="btn btn-secondary" style={{ padding: "6px 10px", fontSize: "0.78rem" }}>
+            <ArrowLeft size={15} /> Quay lại
+          </Link>
 
-        <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
-          {/* Nút 1: Điểm danh */}
-          <button
-            onClick={handleSaveAttendanceOnly}
-            disabled={savingAttendance || savingFinalize}
-            className="btn btn-secondary"
-            style={{ padding: "6px 10px", fontWeight: 700, fontSize: "0.78rem", whiteSpace: "nowrap" }}
-          >
-            {savingAttendance ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
-            {savingAttendance ? "Đang lưu..." : "Điểm danh"}
-          </button>
+          <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
+            {/* Nút 1: Lưu thay đổi */}
+            <button
+              onClick={handleSaveDraft}
+              disabled={savingAttendance || savingFinalize}
+              className="btn btn-secondary"
+              style={{ padding: "6px 10px", fontWeight: 700, fontSize: "0.78rem", whiteSpace: "nowrap" }}
+            >
+              {savingAttendance ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+              {savingAttendance ? "Đang lưu..." : "Lưu"}
+            </button>
 
-          {/* Nút 2: Đóng trận */}
-          <button
-            onClick={handleFinalizeMatch}
-            disabled={savingAttendance || savingFinalize}
-            className="btn btn-primary"
-            style={{ padding: "6px 12px", fontWeight: 800, fontSize: "0.78rem", whiteSpace: "nowrap" }}
-          >
-            {savingFinalize ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle size={14} />}
-            {savingFinalize ? "Đang xử lý..." : "Đóng trận"}
-          </button>
+            {/* Nút 2: Chốt sổ trận đấu */}
+            <button
+              onClick={handleFinalizeMatch}
+              disabled={savingAttendance || savingFinalize}
+              className="btn btn-primary"
+              style={{ padding: "6px 12px", fontWeight: 800, fontSize: "0.78rem", whiteSpace: "nowrap" }}
+            >
+              {savingFinalize ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle size={14} />}
+              {savingFinalize ? "Đang xử lý..." : "Chốt sổ"}
+            </button>
+          </div>
         </div>
-      </div>
 
-      <h1 style={{ fontSize: "1.5rem", fontWeight: 800, color: "var(--card-foreground)" }}>
-        Cập nhật trận đấu: {match?.title}
-      </h1>
+        <h1 style={{ fontSize: "1.35rem", fontWeight: 800, color: "var(--card-foreground)" }}>
+          Cập nhật trận đấu: {match?.title}
+        </h1>
+      </div>
 
       {/* BƯỚC 1: KẾT QUẢ & TIỀN SÂN */}
       <div className="glass-card" style={{ padding: "20px" }}>
@@ -433,10 +436,11 @@ export default function MatchEditPage({ params }: Params) {
                 style={{ background: "#1e293b" }}
                 disabled={result === "DRAW" || !result}
               >
-                <option value="EQUAL">Chia đều (50/50)</option>
-                <option value="LOSER_100">Đội thua chịu 100%</option>
-                <option value="LOSER_70_WINNER_30">Đội thua 70% - Đội thắng 30%</option>
-                <option value="LOSER_60_WINNER_40">Đội thua 60% - Đội thắng 40%</option>
+                {(Object.entries(FEE_SPLIT_METHOD_LABELS) as [string, string][]).map(
+                  ([value, label]) => (
+                    <option key={value} value={value}>{label}</option>
+                  )
+                )}
               </select>
             </div>
           </div>
@@ -501,7 +505,7 @@ export default function MatchEditPage({ params }: Params) {
                 gap: "4px",
               }}
             >
-              <CheckSquare size={14} /> Có mặt tất cả
+              <CheckSquare size={14} /> Tất cả
             </button>
             <button
               type="button"
@@ -520,7 +524,7 @@ export default function MatchEditPage({ params }: Params) {
                 gap: "4px",
               }}
             >
-              <Square size={14} /> Bỏ chọn tất cả
+              <Square size={14} /> Bỏ chọn
             </button>
           </div>
         </div>
@@ -736,7 +740,7 @@ export default function MatchEditPage({ params }: Params) {
                   cursor: "pointer",
                 }}
               >
-                ☑️ Chọn tất cả uống nước
+                ☑️ Tất cả
               </button>
               <button
                 type="button"
@@ -752,7 +756,7 @@ export default function MatchEditPage({ params }: Params) {
                   cursor: "pointer",
                 }}
               >
-                ❌ Bỏ chọn uống nước
+                ❌ Bỏ chọn
               </button>
             </div>
           )}
@@ -783,37 +787,115 @@ export default function MatchEditPage({ params }: Params) {
             Vui lòng đánh dấu thành viên Có mặt ở Bước 2 trước.
           </div>
         ) : (
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: "10px", background: "rgba(30,41,59,0.3)", padding: "12px", borderRadius: "8px", maxHeight: "300px", overflowY: "auto" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(250px, 1fr))", gap: "10px", maxHeight: "360px", overflowY: "auto", paddingRight: "4px" }}>
             {allMembers
               .filter((m) => attendances[m.id]?.status === "ATTENDED")
               .map((member) => {
                 const att = attendances[member.id];
-                return (
-                  <div key={member.id} style={{ display: "flex", flexDirection: "column", gap: "6px", background: "rgba(30,41,59,0.5)", padding: "10px", borderRadius: "8px", border: "1px solid var(--border)" }}>
-                    <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer" }}>
-                      <input 
-                        type="checkbox" 
-                        checked={att?.isDrinks ?? false}
-                        onChange={e => setAttendances({
-                          ...attendances,
-                          [member.id]: { ...att, isDrinks: e.target.checked }
-                        })}
-                        style={{ width: "16px", height: "16px", accentColor: "var(--primary)" }}
-                      />
-                      <span style={{ fontSize: "0.85rem", fontWeight: 600, color: "var(--card-foreground)" }}>
-                        {member.user.name}
-                      </span>
-                    </label>
+                const isDrinks = att?.isDrinks ?? false;
 
-                    {att?.isDrinks && (
-                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", paddingTop: "4px", borderTop: "1px solid rgba(255,255,255,0.06)" }}>
-                        <span style={{ fontSize: "0.72rem", color: "var(--muted-foreground)" }}>Khách uống nước cùng:</span>
+                return (
+                  <div
+                    key={member.id}
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "8px",
+                      padding: "12px",
+                      borderRadius: "10px",
+                      background: isDrinks ? "rgba(34,197,94,0.08)" : "rgba(30,41,59,0.3)",
+                      border: isDrinks ? "1px solid rgba(34,197,94,0.3)" : "1px solid var(--border)",
+                      transition: "all 0.15s ease",
+                    }}
+                  >
+                    {/* Hàng 1: Checkbox Uống nước + Tên + Mã + Badge */}
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px" }}>
+                      <label
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "10px",
+                          cursor: "pointer",
+                          flex: 1,
+                          minWidth: 0,
+                        }}
+                      >
+                        <input 
+                          type="checkbox" 
+                          checked={isDrinks}
+                          onChange={(e) =>
+                            setAttendances({
+                              ...attendances,
+                              [member.id]: { ...att, isDrinks: e.target.checked },
+                            })
+                          }
+                          style={{
+                            width: "18px",
+                            height: "18px",
+                            accentColor: "var(--primary)",
+                            cursor: "pointer",
+                            flexShrink: 0,
+                          }}
+                        />
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div
+                            style={{
+                              fontWeight: 700,
+                              fontSize: "0.88rem",
+                              color: isDrinks ? "var(--card-foreground)" : "var(--muted-foreground)",
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                              whiteSpace: "nowrap",
+                            }}
+                          >
+                            {member.user.name}
+                          </div>
+                          <div style={{ fontSize: "0.72rem", color: "var(--muted-foreground)" }}>
+                            Mã: <span style={{ color: "var(--primary)", fontWeight: 600 }}>{member.code}</span>
+                          </div>
+                        </div>
+                      </label>
+
+                      {/* Badge Trạng thái Uống nước */}
+                      <span
+                        style={{
+                          fontSize: "0.68rem",
+                          fontWeight: 700,
+                          padding: "2px 8px",
+                          borderRadius: "999px",
+                          color: isDrinks ? "#4ade80" : "var(--muted-foreground)",
+                          background: isDrinks ? "rgba(34,197,94,0.15)" : "rgba(255,255,255,0.05)",
+                          flexShrink: 0,
+                        }}
+                      >
+                        {isDrinks ? "Uống nước" : "Không"}
+                      </span>
+                    </div>
+
+                    {/* Hàng 2: Bạn đi cùng uống nước */}
+                    {isDrinks && (
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          gap: "8px",
+                          paddingTop: "8px",
+                          borderTop: "1px solid rgba(255,255,255,0.06)",
+                          marginTop: "2px",
+                        }}
+                      >
+                        <span style={{ fontSize: "0.75rem", color: "var(--muted-foreground)", fontWeight: 600 }}>
+                          + Bạn uống cùng:
+                        </span>
                         <Counter 
                           value={att?.drinksGuestCount ?? 0}
-                          onChange={val => setAttendances({
-                            ...attendances,
-                            [member.id]: { ...att, drinksGuestCount: val }
-                          })}
+                          onChange={(val) =>
+                            setAttendances({
+                              ...attendances,
+                              [member.id]: { ...att, drinksGuestCount: val },
+                            })
+                          }
                         />
                       </div>
                     )}
@@ -827,13 +909,13 @@ export default function MatchEditPage({ params }: Params) {
       {/* Footer Submit Bar với 2 nút rút gọn nằm cùng 1 dòng */}
       <div style={{ display: "flex", justifyContent: "flex-end", gap: "8px", alignItems: "center", marginBottom: "20px" }}>
         <button
-          onClick={handleSaveAttendanceOnly}
+          onClick={handleSaveDraft}
           disabled={savingAttendance || savingFinalize}
           className="btn btn-secondary"
           style={{ padding: "8px 14px", fontWeight: 700, fontSize: "0.82rem", whiteSpace: "nowrap" }}
         >
           {savingAttendance ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
-          {savingAttendance ? "Đang lưu..." : "Điểm danh"}
+          {savingAttendance ? "Đang lưu..." : "Lưu"}
         </button>
 
         <button
@@ -843,7 +925,7 @@ export default function MatchEditPage({ params }: Params) {
           style={{ padding: "8px 16px", fontWeight: 800, fontSize: "0.82rem", whiteSpace: "nowrap" }}
         >
           {savingFinalize ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle size={16} />}
-          {savingFinalize ? "Đang xử lý..." : "Đóng trận"}
+          {savingFinalize ? "Đang xử lý..." : "Chốt sổ"}
         </button>
       </div>
     </div>

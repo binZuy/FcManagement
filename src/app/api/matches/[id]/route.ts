@@ -11,6 +11,7 @@ import {
   PaymentType,
   PaymentStatus,
 } from "@prisma/client";
+import { calcFeePerHeadInternal } from "@/lib/fee-calculator";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -40,8 +41,8 @@ export async function GET(_req: NextRequest, { params }: Params) {
   return NextResponse.json({ data: match });
 }
 
-// Hàm tính tiền sân mỗi suất dựa trên kết quả, đội, phương pháp chia
-function calcFeePerHead(params: {
+// Helper: tính fee per head cho 1 attendance, tích hợp cả INTERNAL lẫn EXTERNAL
+function resolveFeePH(params: {
   matchType: string;
   result: string | null;
   feeSplitMethod: string;
@@ -55,33 +56,22 @@ function calcFeePerHead(params: {
   winningHeads: number;
   losingHeads: number;
 }): number {
-  const { matchType, result, feeSplitMethod, feeTotal, feeDefault, feeWinner, feeLose, feeDraw, teamSide, totalHeads, winningHeads, losingHeads } = params;
+  const { matchType, result, feeSplitMethod, feeTotal, feeDefault, feeWinner, feeLose, feeDraw,
+          teamSide, totalHeads, winningHeads, losingHeads } = params;
   if (!result) return 0;
 
   if (feeTotal && feeTotal > 0) {
     if (matchType === "INTERNAL") {
-      const method = feeSplitMethod || "EQUAL";
-      const winningTeamSide = result === "WIN" ? "TEAM_A" : "TEAM_B";
-      const isWinner = teamSide === winningTeamSide;
-
-      if (result === "DRAW" || method === "EQUAL") {
-        return totalHeads > 0 ? feeTotal / totalHeads : 0;
-      }
-      if (method === "LOSER_100") {
-        return isWinner ? 0 : losingHeads > 0 ? feeTotal / losingHeads : 0;
-      }
-      if (method === "LOSER_70_WINNER_30") {
-        return isWinner
-          ? winningHeads > 0 ? (feeTotal * 0.3) / winningHeads : 0
-          : losingHeads > 0 ? (feeTotal * 0.7) / losingHeads : 0;
-      }
-      if (method === "LOSER_60_WINNER_40") {
-        return isWinner
-          ? winningHeads > 0 ? (feeTotal * 0.4) / winningHeads : 0
-          : losingHeads > 0 ? (feeTotal * 0.6) / losingHeads : 0;
-      }
-      // fallback equal
-      return totalHeads > 0 ? feeTotal / totalHeads : 0;
+      // Dùng calcFeePerHeadInternal từ fee-calculator (kèo lấy từ constants.ts)
+      return calcFeePerHeadInternal({
+        feeSplitMethod: feeSplitMethod || "EQUAL",
+        feeTotal,
+        result,
+        teamSide,
+        totalHeads,
+        winningHeads,
+        losingHeads,
+      });
     } else {
       // EXTERNAL – chia đều
       return totalHeads > 0 ? feeTotal / totalHeads : 0;
@@ -119,7 +109,6 @@ async function handleUpdateMatch(request: NextRequest, { params }: Params) {
 
   let finalStatus: MatchStatus = match.status;
   if (status) finalStatus = status as MatchStatus;
-  else if (result) finalStatus = MatchStatus.DONE;
 
   const updated = await prisma.matchSession.update({
     where: { id },
@@ -133,6 +122,7 @@ async function handleUpdateMatch(request: NextRequest, { params }: Params) {
       feeDraw: feeDraw != null ? parseFloat(feeDraw) : undefined,
       feeDefault: feeDefault != null ? parseFloat(feeDefault) : undefined,
       drinksFeeTotal: drinksFeeTotal != null ? parseFloat(drinksFeeTotal) : undefined,
+      feeSplitMethod: feeSplitMethod ?? undefined,
     },
   });
 
@@ -157,7 +147,7 @@ async function handleUpdateMatch(request: NextRequest, { params }: Params) {
         } else memberResult = result as MatchResult;
       }
 
-      const fpH = calcFeePerHead({
+      const fpH = resolveFeePH({
         matchType: match.matchType,
         result,
         feeSplitMethod: feeSplitMethod || "EQUAL",
@@ -248,7 +238,7 @@ export async function POST(request: NextRequest, { params }: Params) {
   const existingRecords: any[] = (paySession as any).paymentRecords ?? [];
 
   for (const a of active) {
-    const fpH = calcFeePerHead({
+    const fpH = resolveFeePH({
       matchType: match.matchType,
       result: match.result,
       feeSplitMethod: match.feeSplitMethod || "EQUAL",

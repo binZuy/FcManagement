@@ -91,6 +91,11 @@ export async function POST(request: NextRequest) {
 
         const attendanceData: any[] = [];
         
+        // Calculate fees if feeTotal is provided
+        const totalHeads = attendeesA.length + attendeesB.length;
+        const feePerHead = (item.feeTotal && totalHeads > 0) ? item.feeTotal / totalHeads : 0;
+        const drinksFeePerHead = (item.drinksFeeTotal && totalHeads > 0) ? item.drinksFeeTotal / totalHeads : 0;
+
         // Process Team A
         for (const member of attendeesA) {
           attendanceData.push({
@@ -99,6 +104,8 @@ export async function POST(request: NextRequest) {
             status: AttendStatus.ATTENDED,
             teamSide: mType === MatchType.INTERNAL ? "TEAM_A" : null,
             matchResultForMember: item.result || null,
+            feeAssigned: feePerHead,
+            drinksFeeAssigned: drinksFeePerHead,
           });
         }
 
@@ -110,6 +117,8 @@ export async function POST(request: NextRequest) {
             status: AttendStatus.ATTENDED,
             teamSide: mType === MatchType.INTERNAL ? "TEAM_B" : null,
             matchResultForMember: mType === MatchType.INTERNAL ? resultB : (item.result || null),
+            feeAssigned: feePerHead,
+            drinksFeeAssigned: drinksFeePerHead,
           });
         }
 

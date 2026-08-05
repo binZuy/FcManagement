@@ -85,7 +85,7 @@ export default async function MatchDetailPage({ params }: Params) {
               ) : null}
             </div>
           </div>
-          {isAdmin && match.status !== MatchStatus.DONE && (
+          {isAdmin && (
             <Link href={`/matches/${match.id}/edit`} className="btn btn-primary" style={{ padding: "6px 14px", fontSize: "0.82rem", fontWeight: 700 }}>
               <Edit size={16} /> Điểm danh & Cập nhật
             </Link>

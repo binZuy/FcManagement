@@ -139,102 +139,96 @@ export default async function DashboardPage() {
       </div>
 
       {/* Stats grid (Cho tất cả thành viên) */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
-          gap: "16px",
-        }}
-      >
+      <div className="stats-grid">
         <div className="stat-card animate-fade-in">
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "12px" }}>
-            <div style={{ width: 44, height: 44, borderRadius: 12, background: "rgba(34, 197, 94, 0.15)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <Users size={22} color="#22c55e" />
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
+            <span style={{ fontSize: "0.82rem", fontWeight: 600, color: "var(--muted-foreground)" }}>Thành viên</span>
+            <div style={{ width: 34, height: 34, borderRadius: 8, background: "rgba(34, 197, 94, 0.15)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <Users size={18} color="#22c55e" />
             </div>
           </div>
-          <div style={{ fontSize: "1.6rem", fontWeight: 800, color: "var(--card-foreground)", marginBottom: "4px" }}>
+          <div className="stat-card-value">
             {data.activeMembers}
           </div>
-          <div style={{ fontSize: "0.8rem", color: "var(--muted-foreground)" }}>Số thành viên</div>
-          <div style={{ fontSize: "0.75rem", color: "#22c55e", marginTop: "2px" }}>
+          <div style={{ fontSize: "0.72rem", color: "#22c55e", marginTop: "4px" }}>
             {data.totalMembers} tổng thành viên
           </div>
         </div>
 
         <div className="stat-card animate-fade-in" style={{ animationDelay: "0.05s" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "12px" }}>
-            <div style={{ width: 44, height: 44, borderRadius: 12, background: "rgba(96, 165, 250, 0.15)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <CalendarDays size={22} color="#60a5fa" />
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
+            <span style={{ fontSize: "0.82rem", fontWeight: 600, color: "var(--muted-foreground)" }}>Tổng số trận</span>
+            <div style={{ width: 34, height: 34, borderRadius: 8, background: "rgba(96, 165, 250, 0.15)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <CalendarDays size={18} color="#60a5fa" />
             </div>
           </div>
-          <div style={{ fontSize: "1.6rem", fontWeight: 800, color: "var(--card-foreground)", marginBottom: "4px" }}>
+          <div className="stat-card-value">
             {data.totalMatches}
           </div>
-          <div style={{ fontSize: "0.8rem", color: "var(--muted-foreground)" }}>Tổng số trận</div>
-          <div style={{ fontSize: "0.75rem", color: "#60a5fa", marginTop: "2px" }}>
-            {data.matchesDone} trận đã đá xong
+          <div style={{ fontSize: "0.72rem", color: "#60a5fa", marginTop: "4px" }}>
+            {data.matchesDone} trận đã đá
           </div>
         </div>
 
         <div className="stat-card animate-fade-in" style={{ animationDelay: "0.1s" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "12px" }}>
-            <div style={{ width: 44, height: 44, borderRadius: 12, background: "rgba(250, 204, 21, 0.15)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <Trophy size={22} color="#facc15" />
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
+            <span style={{ fontSize: "0.82rem", fontWeight: 600, color: "var(--muted-foreground)" }}>Tỷ lệ thắng</span>
+            <div style={{ width: 34, height: 34, borderRadius: 8, background: "rgba(250, 204, 21, 0.15)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <Trophy size={18} color="#facc15" />
             </div>
           </div>
-          <div style={{ fontSize: "1.6rem", fontWeight: 800, color: "var(--card-foreground)", marginBottom: "4px" }}>
+          <div className="stat-card-value" style={{ background: "linear-gradient(135deg, #fef08a 30%, #eab308 100%)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
             {data.winRate}%
           </div>
-          <div style={{ fontSize: "0.8rem", color: "var(--muted-foreground)" }}>Tỷ lệ thắng</div>
-          <div style={{ fontSize: "0.75rem", color: "#facc15", marginTop: "2px" }}>
+          <div style={{ fontSize: "0.72rem", color: "#facc15", marginTop: "4px" }}>
             {data.wins}/{data.totalPlayedWithResult} trận thắng
           </div>
         </div>
 
         <div className="stat-card animate-fade-in" style={{ animationDelay: "0.15s" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "12px" }}>
-            <div style={{ width: 44, height: 44, borderRadius: 12, background: "rgba(167, 139, 250, 0.15)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <Activity size={22} color="#a78bfa" />
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
+            <span style={{ fontSize: "0.82rem", fontWeight: 600, color: "var(--muted-foreground)" }}>Trận / tháng</span>
+            <div style={{ width: 34, height: 34, borderRadius: 8, background: "rgba(167, 139, 250, 0.15)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <Activity size={18} color="#a78bfa" />
             </div>
           </div>
-          <div style={{ fontSize: "1.6rem", fontWeight: 800, color: "var(--card-foreground)", marginBottom: "4px" }}>
+          <div className="stat-card-value">
             {data.avgMatchesPerMonth}
           </div>
-          <div style={{ fontSize: "0.8rem", color: "var(--muted-foreground)" }}>Số trận / tháng</div>
-          <div style={{ fontSize: "0.75rem", color: "#a78bfa", marginTop: "2px" }}>
-            Tần suất ra sân trung bình
+          <div style={{ fontSize: "0.72rem", color: "#a78bfa", marginTop: "4px" }}>
+            Tần suất trung bình
           </div>
         </div>
 
         {/* ADMIN FINANCIAL OVERVIEW (Chỉ Admin mới hiển thị) */}
         {isAdmin && (
           <>
-            <div className="stat-card animate-fade-in" style={{ animationDelay: "0.2s", border: "1px solid rgba(34,197,94,0.3)" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "12px" }}>
-                <div style={{ width: 44, height: 44, borderRadius: 12, background: "rgba(34, 197, 94, 0.15)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                  <CheckCircle size={22} color="#4ade80" />
+            <div className="stat-card animate-fade-in" style={{ animationDelay: "0.2s", border: "1px solid rgba(34,197,94,0.35)", background: "linear-gradient(145deg, rgba(34,197,94,0.1), rgba(15,23,42,0.95))" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
+                <span style={{ fontSize: "0.82rem", fontWeight: 600, color: "var(--muted-foreground)" }}>[Admin] Đã thu</span>
+                <div style={{ width: 34, height: 34, borderRadius: 8, background: "rgba(34, 197, 94, 0.2)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <CheckCircle size={18} color="#4ade80" />
                 </div>
               </div>
-              <div style={{ fontSize: "1.4rem", fontWeight: 800, color: "#4ade80", marginBottom: "4px" }}>
+              <div className="stat-card-value" style={{ background: "linear-gradient(135deg, #4ade80 30%, #16a34a 100%)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
                 {formatCurrency(totalCollected)}
               </div>
-              <div style={{ fontSize: "0.8rem", color: "var(--muted-foreground)" }}>[Admin] Đã thu</div>
-              <div style={{ fontSize: "0.75rem", color: "#4ade80", marginTop: "2px" }}>
+              <div style={{ fontSize: "0.72rem", color: "#4ade80", marginTop: "4px" }}>
                 Các phiên đang mở
               </div>
             </div>
 
-            <div className="stat-card animate-fade-in" style={{ animationDelay: "0.25s", border: "1px solid rgba(248,113,113,0.3)" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "12px" }}>
-                <div style={{ width: 44, height: 44, borderRadius: 12, background: "rgba(239, 68, 68, 0.15)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                  <AlertCircle size={22} color="#f87171" />
+            <div className="stat-card animate-fade-in" style={{ animationDelay: "0.25s", border: "1px solid rgba(239,68,68,0.35)", background: "linear-gradient(145deg, rgba(239,68,68,0.1), rgba(15,23,42,0.95))" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
+                <span style={{ fontSize: "0.82rem", fontWeight: 600, color: "var(--muted-foreground)" }}>[Admin] Cần thu</span>
+                <div style={{ width: 34, height: 34, borderRadius: 8, background: "rgba(239, 68, 68, 0.2)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <AlertCircle size={18} color="#f87171" />
                 </div>
               </div>
-              <div style={{ fontSize: "1.4rem", fontWeight: 800, color: "#f87171", marginBottom: "4px" }}>
+              <div className="stat-card-value" style={{ background: "linear-gradient(135deg, #f87171 30%, #dc2626 100%)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
                 {formatCurrency(totalRemaining)}
               </div>
-              <div style={{ fontSize: "0.8rem", color: "var(--muted-foreground)" }}>[Admin] Tổng khoản cần thu</div>
-              <div style={{ fontSize: "0.75rem", color: "#f87171", marginTop: "2px" }}>
+              <div style={{ fontSize: "0.72rem", color: "#f87171", marginTop: "4px" }}>
                 Số tiền cần đóng
               </div>
             </div>

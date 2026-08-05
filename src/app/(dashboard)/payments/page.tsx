@@ -32,18 +32,13 @@ export default async function PaymentsPage() {
     };
   });
 
-  // Sắp xếp: còn khoản chưa đóng lên đầu
-  const sortedMembers = memberStats.sort((a, b) => {
-    if (a.debt > 0 && b.debt > 0) {
-      return b.debt - a.debt;
-    }
-    if (a.debt > 0 && b.debt === 0) return -1;
-    if (a.debt === 0 && b.debt > 0) return 1;
-    return (a.user.name ?? "").localeCompare(b.user.name ?? "");
-  });
+  // Chỉ lọc lấy những thành viên có khoản cần thu (debt > 0)
+  const debtMembers = memberStats
+    .filter((m) => m.debt > 0)
+    .sort((a, b) => b.debt - a.debt);
 
   const totalOwed = memberStats.reduce((sum, m) => sum + m.debt, 0);
-  const membersWithDebt = memberStats.filter((m) => m.debt > 0).length;
+  const membersWithDebt = debtMembers.length;
   const doneMembers = memberStats.filter((m) => m.debt === 0).length;
 
   return (
@@ -55,64 +50,75 @@ export default async function PaymentsPage() {
             Quản lý Thu tiền theo thành viên
           </h1>
           <p style={{ color: "var(--muted-foreground)", fontSize: "0.9rem" }}>
-            Theo dõi chi tiết các khoản phí của từng thành viên
+            Danh sách thành viên đang có khoản phí cần thanh toán
           </p>
         </div>
       </div>
 
       {/* Overview Stats Cards (Chỉ Admin mới hiển thị tổng quan tài chính) */}
       {isAdmin && (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: "16px" }}>
+        <div className="stats-grid">
           <div className="stat-card">
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
-              <span style={{ fontSize: "0.85rem", color: "var(--muted-foreground)" }}>[Admin] Tổng khoản cần thu</span>
-              <Wallet size={20} color="#f87171" />
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
+              <span style={{ fontSize: "0.82rem", fontWeight: 600, color: "var(--muted-foreground)" }}>[Admin] Tổng nợ</span>
+              <div style={{ width: 34, height: 34, borderRadius: 8, background: "rgba(239, 68, 68, 0.15)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <Wallet size={18} color="#f87171" />
+              </div>
             </div>
-            <div style={{ fontSize: "1.5rem", fontWeight: 800, color: "#f87171" }}>
+            <div className="stat-card-value" style={{ background: "linear-gradient(135deg, #f87171 30%, #dc2626 100%)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
               {formatCurrency(totalOwed)}
             </div>
-            <div style={{ fontSize: "0.75rem", color: "var(--muted-foreground)", marginTop: "4px" }}>
-              Từ {membersWithDebt} thành viên chưa thanh toán đủ
+            <div style={{ fontSize: "0.72rem", color: "#f87171", marginTop: "4px" }}>
+              Tổng tiền cần thu
             </div>
           </div>
 
           <div className="stat-card">
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
-              <span style={{ fontSize: "0.85rem", color: "var(--muted-foreground)" }}>Chưa hoàn thành</span>
-              <AlertCircle size={20} color="#facc15" />
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
+              <span style={{ fontSize: "0.82rem", fontWeight: 600, color: "var(--muted-foreground)" }}>Cần thu tiền</span>
+              <div style={{ width: 34, height: 34, borderRadius: 8, background: "rgba(250, 204, 21, 0.15)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <AlertCircle size={18} color="#facc15" />
+              </div>
             </div>
-            <div style={{ fontSize: "1.5rem", fontWeight: 800, color: "#facc15" }}>
+            <div className="stat-card-value" style={{ background: "linear-gradient(135deg, #fef08a 30%, #eab308 100%)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
               {membersWithDebt}
             </div>
-            <div style={{ fontSize: "0.75rem", color: "var(--muted-foreground)", marginTop: "4px" }}>
-              Thành viên còn khoản phí cần thanh toán
+            <div style={{ fontSize: "0.72rem", color: "#facc15", marginTop: "4px" }}>
+              Thành viên chưa đóng đủ
             </div>
           </div>
 
           <div className="stat-card">
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
-              <span style={{ fontSize: "0.85rem", color: "var(--muted-foreground)" }}>Đã hoàn thành (Done)</span>
-              <CheckCircle size={20} color="#4ade80" />
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
+              <span style={{ fontSize: "0.82rem", fontWeight: 600, color: "var(--muted-foreground)" }}>Hoàn thành (Done)</span>
+              <div style={{ width: 34, height: 34, borderRadius: 8, background: "rgba(34, 197, 94, 0.15)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <CheckCircle size={18} color="#4ade80" />
+              </div>
             </div>
-            <div style={{ fontSize: "1.5rem", fontWeight: 800, color: "#4ade80" }}>
+            <div className="stat-card-value" style={{ background: "linear-gradient(135deg, #4ade80 30%, #16a34a 100%)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
               {doneMembers}
             </div>
-            <div style={{ fontSize: "0.75rem", color: "var(--muted-foreground)", marginTop: "4px" }}>
-              Thành viên đã đóng đủ các khoản
+            <div style={{ fontSize: "0.72rem", color: "#4ade80", marginTop: "4px" }}>
+              Thành viên không còn nợ
             </div>
           </div>
         </div>
       )}
 
-      {/* Members List */}
+      {/* Members List (Chỉ hiển thị thành viên nợ tiền) */}
       <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-        {sortedMembers.length === 0 && (
+        {debtMembers.length === 0 && (
           <div className="glass-card" style={{ padding: "60px 24px", textAlign: "center" }}>
-            <Users size={48} style={{ margin: "0 auto 16px", opacity: 0.3, display: "block" }} />
-            <div style={{ fontWeight: 600, color: "var(--muted-foreground)" }}>Chưa có thành viên nào</div>
+            <CheckCircle size={48} style={{ margin: "0 auto 16px", color: "#4ade80", opacity: 0.8, display: "block" }} />
+            <div style={{ fontWeight: 700, fontSize: "1.1rem", color: "var(--card-foreground)", marginBottom: "4px" }}>
+              Tất cả thành viên đã hoàn thành đóng phí!
+            </div>
+            <div style={{ fontSize: "0.85rem", color: "var(--muted-foreground)" }}>
+              Không có khoản nợ nào cần thu tại thời điểm hiện tại.
+            </div>
           </div>
         )}
-        {sortedMembers.map((member) => {
+        {debtMembers.map((member) => {
           const hasDebt = member.debt > 0;
           return (
             <Link key={member.id} href={`/payments/${member.id}`} style={{ textDecoration: "none" }}>

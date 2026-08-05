@@ -22,10 +22,11 @@ export function MonthPicker({ currentMonth, view }: MonthPickerProps) {
       type="month"
       value={currentMonth}
       onChange={handleMonthChange}
+      className="accent-emerald-500"
       style={{
-        background: "rgba(30, 41, 59, 0.6)",
-        color: "var(--card-foreground)",
-        border: "1px solid var(--border)",
+        background: "#1e293b",
+        color: "#f8fafc",
+        border: "1px solid #334155",
         borderRadius: "6px",
         padding: "3px 8px",
         fontSize: "0.78rem",
@@ -33,6 +34,7 @@ export function MonthPicker({ currentMonth, view }: MonthPickerProps) {
         outline: "none",
         cursor: "pointer",
         height: "32px",
+        colorScheme: "dark",
       }}
     />
   );

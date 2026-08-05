@@ -64,6 +64,8 @@ export function QRPaymentDialog({
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  const STORAGE_KEY = `active_qr_bundle_${memberId}`;
+
   // Cleanup khi đóng dialog
   const cleanup = useCallback(() => {
     if (pollRef.current) clearInterval(pollRef.current);
@@ -72,6 +74,11 @@ export function QRPaymentDialog({
 
   const handleClose = useCallback(async () => {
     cleanup();
+    try {
+      localStorage.removeItem(STORAGE_KEY);
+    } catch {
+      // Ignore
+    }
 
     // Cancel bundle nếu đang PENDING
     if (bundleId && step === "qr") {
@@ -90,7 +97,79 @@ export function QRPaymentDialog({
     setQrContent("");
     setQrUrl(null);
     setExpiresAt(null);
-  }, [bundleId, step, cleanup]);
+  }, [bundleId, step, cleanup, STORAGE_KEY]);
+
+  // Polling & Status Check
+  const checkStatusNow = useCallback(async (id: string) => {
+    try {
+      const res = await fetch(`/api/payments/bundles/${id}`);
+      const data = await res.json();
+      const status = data.bundle?.status;
+      if (status === "PAID") {
+        cleanup();
+        try {
+          localStorage.removeItem(STORAGE_KEY);
+        } catch {}
+        setStep("success");
+        setTimeout(() => window.location.reload(), 2500);
+      } else if (status === "EXPIRED" || status === "CANCELLED") {
+        cleanup();
+        try {
+          localStorage.removeItem(STORAGE_KEY);
+        } catch {}
+        setError("Mã QR đã hết hạn hoặc bị hủy. Vui lòng đóng và tạo lại.");
+      } else if (data.bundle) {
+        // Restore/Update bundle state nếu khôi phục từ Storage
+        setBundleId(data.bundle.id);
+        setBundleCode(data.bundle.bundleCode);
+        setQrContent(data.qrContent);
+        setQrUrl(data.qrUrl);
+        setTotalAmount(data.bundle.totalAmount);
+        setExpiresAt(new Date(data.bundle.expiresAt));
+      }
+    } catch {
+      // Bỏ qua lỗi mạng tạm thời
+    }
+  }, [cleanup, STORAGE_KEY]);
+
+  const startPolling = useCallback((id: string) => {
+    if (pollRef.current) clearInterval(pollRef.current);
+    pollRef.current = setInterval(() => checkStatusNow(id), POLL_INTERVAL_MS);
+  }, [checkStatusNow]);
+
+  // Tự động khôi phục QR đang chờ (PENDING) khi Mount/Reload lại trang
+  useEffect(() => {
+    try {
+      const savedBundleId = localStorage.getItem(STORAGE_KEY);
+      if (savedBundleId) {
+        setOpen(true);
+        setStep("qr");
+        setLoading(true);
+        checkStatusNow(savedBundleId).finally(() => setLoading(false));
+        startPolling(savedBundleId);
+      }
+    } catch {
+      // Ignore localStorage errors
+    }
+  }, [STORAGE_KEY, checkStatusNow, startPolling]);
+
+  // Tự động check khẩn cấp khi người dùng quay lại tab/trình duyệt từ App Ngân Hàng
+  useEffect(() => {
+    if (!open || !bundleId || step !== "qr") return;
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible" && bundleId) {
+        checkStatusNow(bundleId);
+      }
+    };
+
+    window.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("focus", handleVisibilityChange);
+    return () => {
+      window.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("focus", handleVisibilityChange);
+    };
+  }, [open, bundleId, step, checkStatusNow]);
 
   // Countdown timer
   useEffect(() => {
@@ -110,29 +189,6 @@ export function QRPaymentDialog({
       if (countdownRef.current) clearInterval(countdownRef.current);
     };
   }, [open, step, expiresAt]);
-
-  // Polling bundle status
-  const startPolling = useCallback((id: string) => {
-    if (pollRef.current) clearInterval(pollRef.current);
-    pollRef.current = setInterval(async () => {
-      try {
-        const res = await fetch(`/api/payments/bundles/${id}`);
-        const data = await res.json();
-        const status = data.bundle?.status;
-        if (status === "PAID") {
-          clearInterval(pollRef.current!);
-          if (countdownRef.current) clearInterval(countdownRef.current);
-          setStep("success");
-          setTimeout(() => window.location.reload(), 2500);
-        } else if (status === "EXPIRED" || status === "CANCELLED") {
-          clearInterval(pollRef.current!);
-          setError("Mã QR đã hết hạn. Vui lòng đóng và bấm Tạo QR lại.");
-        }
-      } catch {
-        // Bỏ qua lỗi mạng tạm thời
-      }
-    }, POLL_INTERVAL_MS);
-  }, []);
 
   // Mở Dialog và gọi API tạo QR ngay lập tức
   const handleOpenAndGenerateQR = async () => {
@@ -157,6 +213,12 @@ export function QRPaymentDialog({
       setQrUrl(data.qrUrl);
       setTotalAmount(data.bundle.totalAmount);
       setExpiresAt(new Date(data.bundle.expiresAt));
+
+      // Lưu trạng thái QR đang chờ vào localStorage
+      try {
+        localStorage.setItem(STORAGE_KEY, data.bundle.id);
+      } catch {}
+
       startPolling(data.bundle.id);
     } catch (err: any) {
       setError(err.message ?? "Có lỗi xảy ra");
@@ -178,12 +240,30 @@ export function QRPaymentDialog({
   const handleDownloadQR = async () => {
     if (!qrUrl) return;
     try {
+      const fileName = `QR_ThanhToan_${memberCode}_${bundleCode || "FC"}.png`;
       const response = await fetch(qrUrl);
       const blob = await response.blob();
+
+      // Kiểm tra nếu thiết bị hỗ trợ chia sẻ/lưu file di động (Web Share API)
+      const file = new File([blob], fileName, { type: "image/png" });
+      if (
+        navigator.share &&
+        navigator.canShare &&
+        navigator.canShare({ files: [file] })
+      ) {
+        await navigator.share({
+          files: [file],
+          title: "Ảnh QR Thanh Toán",
+          text: `Mã thanh toán ${bundleCode || ""}`,
+        });
+        return;
+      }
+
+      // Phương thức tải xuống chuẩn cho máy tính & browser mặc định
       const blobUrl = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = blobUrl;
-      link.download = `QR_ThanhToan_${memberCode}_${bundleCode || "FC"}.png`;
+      link.download = fileName;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -453,7 +533,7 @@ export function QRPaymentDialog({
                       {/* Action Buttons: App Direct Link & Download QR Image */}
                       <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", justifyContent: "center" }}>
                         <a
-                          href={`https://dl.vietqr.co/pay?app_id=${process.env.NEXT_PUBLIC_BANK_BIN}&app_value=${process.env.NEXT_PUBLIC_ACCOUNT_NO}&amount=${totalAmount}&add_info=${encodeURIComponent(qrContent)}`}
+                          href={`https://dl.vietqr.io/pay?app=${process.env.NEXT_PUBLIC_BANK_BIN}&ba=${process.env.NEXT_PUBLIC_ACCOUNT_NO}&am=${totalAmount}&tn=${encodeURIComponent(qrContent)}`}
                           target="_blank"
                           rel="noopener noreferrer"
                           style={{
