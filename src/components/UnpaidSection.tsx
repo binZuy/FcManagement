@@ -107,10 +107,10 @@ export function UnpaidSection({
           }}
         >
           <AlertCircle size={17} />
-          Cac tran/khoan chua dong ({unpaidRecords.length})
+          Các trận/khoản chưa đóng ({unpaidRecords.length})
         </h2>
 
-        {/* Action Button: full-width tren mobile */}
+        {/* Nút Tạo QR — full-width trên mobile */}
         {unpaidRecords.length > 0 && (
           <div style={{ width: "100%" }}>
             <QRPaymentDialog
@@ -154,7 +154,7 @@ export function UnpaidSection({
                 fontWeight: 600,
               }}
             >
-              Chon tat ca
+              Chọn tất cả
             </button>
             <button
               onClick={clearAll}
@@ -169,12 +169,12 @@ export function UnpaidSection({
                 fontWeight: 600,
               }}
             >
-              Bo chon
+              Bỏ chọn
             </button>
           </div>
 
           <div style={{ fontSize: "0.78rem", color: "var(--muted-foreground)", whiteSpace: "nowrap" }}>
-            <strong style={{ color: "#f1f5f9" }}>{selectedIds.size}</strong>/{unpaidRecords.length} ·{" "}
+            Đã chọn: <strong style={{ color: "#f1f5f9" }}>{selectedIds.size}</strong>/{unpaidRecords.length} · Tổng:{" "}
             <strong style={{ color: selectedIds.size > 0 ? "#22c55e" : "var(--muted-foreground)" }}>
               {formatCurrency(selectedTotal)}
             </strong>
@@ -252,30 +252,14 @@ export function UnpaidSection({
                     whiteSpace: "nowrap",
                   }}
                 >
-                  {r.session.title} {r.note ? <span style={{ color: "#fb923c", fontWeight: 600 }}>({r.note.replace("Khách đi cùng", "Bạn").replace("Bạn đi cùng", "Bạn").replace("+", "")})</span> : ""}
+                  {r.session.title}{r.note ? <span style={{ color: "#fb923c", fontWeight: 600 }}> ({r.note.replace("Khách đi cùng", "Bạn").replace("Bạn đi cùng", "Bạn").replace("+", "")})</span> : ""}
                 </div>
-                <div
-                  style={{
-                    fontSize: "0.75rem",
-                    color: "var(--muted-foreground)",
-                    marginTop: "4px",
-                    display: "flex",
-                    gap: "8px",
-                    flexWrap: "wrap",
-                  }}
-                >
-                  <span style={{ color: cfg.color, fontWeight: 600 }}>
-                    {cfg.label}
-                  </span>
-                  <span>•</span>
-                  <span>Yêu cầu: {formatCurrency(r.amountRequired)}</span>
-                  {r.session.dueDate && (
-                    <>
-                      <span>•</span>
-                      <span>Hạn: {formatDate(r.session.dueDate)}</span>
-                    </>
-                  )}
-                </div>
+                {/* Chỉ hiển thị hạn nộp nếu có — bỏ status & yêu cầu vì thừa */}
+                {r.session.dueDate && (
+                  <div style={{ fontSize: "0.72rem", color: "var(--muted-foreground)", marginTop: "3px" }}>
+                    Hạn: {formatDate(r.session.dueDate)}
+                  </div>
+                )}
               </div>
 
               <div

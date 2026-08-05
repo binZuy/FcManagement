@@ -53,14 +53,9 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         // TỰ ĐỘNG TẠO MEMBER PROFILE NẾU CHƯA CÓ (áp dụng cho Admin và AllowedEmails)
         if (dbUser && !dbUser.member) {
           const { generateMemberCode } = await import("@/lib/utils");
-          let baseCode = generateMemberCode(dbUser.name || "MB");
-          let memberCode = baseCode;
-          let attempt = 0;
-          
-          while (await prisma.member.findUnique({ where: { code: memberCode } })) {
-            attempt++;
-            memberCode = `${baseCode}${attempt}`;
-          }
+          const baseCode = generateMemberCode(dbUser.name || "MB");
+          const randSuffix = Math.floor(100 + Math.random() * 900);
+          const memberCode = `${baseCode}${randSuffix}`;
 
           await prisma.member.create({
             data: {

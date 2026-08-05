@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import {
@@ -35,10 +35,24 @@ function formatCurrency(amount: number): string {
 }
 
 function formatCountdown(ms: number): string {
-  if (ms <= 0) return "Het han";
+  if (ms <= 0) return "Hết hạn";
   const minutes = Math.floor(ms / 60000);
   const seconds = Math.floor((ms % 60000) / 1000);
   return `${minutes}:${seconds.toString().padStart(2, "0")}`;
+}
+
+/**
+ * Build VietQR image URL hoàn toàn trên client — không cần server tính
+ * Vì tất cả biến đều là NEXT_PUBLIC_* nên client sử dụng được trực tiếp
+ */
+function buildClientQRUrl(bankBin: string, accountNo: string, accountName: string, amount: number, addInfo: string): string {
+  const base = `https://img.vietqr.io/image/${bankBin}-${accountNo}-compact2.png`;
+  const q = new URLSearchParams({
+    amount: String(Math.round(amount)),
+    addInfo,
+    accountName,
+  });
+  return `${base}?${q.toString()}`;
 }
 
 export function QRPaymentDialog({
@@ -108,7 +122,7 @@ export function QRPaymentDialog({
       } else if (status === "EXPIRED" || status === "CANCELLED") {
         cleanup();
         try { localStorage.removeItem(STORAGE_KEY); } catch {}
-        setError("Ma QR da het han hoac bi huy. Vui long dong va tao lai.");
+        setError("Mã QR đã hết hạn hoặc bị hủy. Vui lòng đóng và tạo lại.");
       } else if (data.bundle) {
         setBundleId(data.bundle.id);
         setBundleCode(data.bundle.bundleCode);
@@ -180,12 +194,16 @@ export function QRPaymentDialog({
         body: JSON.stringify({ memberId, recordIds: selectedRecordIds }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Co loi xay ra khi tao QR");
+      if (!res.ok) throw new Error(data.error ?? "Có lỗi xảy ra khi tạo QR");
       setBundleId(data.bundle.id);
       setBundleCode(data.bundle.bundleCode);
       setBundleStatus(data.bundle.status ?? "PENDING");
       setQrContent(data.qrContent);
-      setQrUrl(data.qrUrl);
+      // Client tự build QR URL ngay — không đợi server trả về
+      const clientQrUrl = (BANK_BIN && ACCOUNT_NO)
+        ? buildClientQRUrl(BANK_BIN, ACCOUNT_NO, process.env.NEXT_PUBLIC_ACCOUNT_NAME ?? "", data.bundle.totalAmount, data.qrContent)
+        : null;
+      setQrUrl(clientQrUrl);
       setTotalAmount(data.bundle.totalAmount);
       setExpiresAt(new Date(data.bundle.expiresAt));
       try { localStorage.setItem(STORAGE_KEY, data.bundle.id); } catch {}
@@ -234,7 +252,7 @@ export function QRPaymentDialog({
         try {
           await navigator.share({
             files: [file],
-            title: "QR Thanh Toan FC",
+            title: "QR Thanh Toán FC",
           });
           setSaveStatus("saved");
           setTimeout(() => setSaveStatus("idle"), 3000);
@@ -269,10 +287,10 @@ export function QRPaymentDialog({
   };
 
   const isExpired = countdown <= 0;
-  const saveLabel = saveStatus === "idle" ? "Luu anh QR"
-    : saveStatus === "saving" ? "Dang luu..."
-    : saveStatus === "saved" ? "Da luu!"
-    : "Giu anh de luu";
+  const saveLabel = saveStatus === "idle" ? "Lưu ảnh QR"
+    : saveStatus === "saving" ? "Đang lưu..."
+    : saveStatus === "saved" ? "Đã lưu!"
+    : "Nhấn giữ ảnh để lưu";
 
   return (
     <>
@@ -300,8 +318,8 @@ export function QRPaymentDialog({
       >
         <Zap size={15} />
         {selectedRecordIds.length > 0
-          ? `Tao QR (${formatCurrency(selectedTotalAmount)})`
-          : "Chon tran can dong"}
+          ? `Tạo QR (${formatCurrency(selectedTotalAmount)})`
+          : "Chọn trận cần đóng"}
       </button>
 
       {open && (
@@ -323,14 +341,14 @@ export function QRPaymentDialog({
             style={{
               background: "#0f172a",
               border: "1px solid rgba(34,197,94,0.25)",
-              borderRadius: "20px",
+              borderRadius: "16px",
               width: "100%",
-              maxWidth: "420px",
-              maxHeight: "92dvh",
+              maxWidth: "360px",
+              maxHeight: "90dvh",
               overflow: "hidden",
               display: "flex",
               flexDirection: "column",
-              boxShadow: "0 30px 80px rgba(0,0,0,0.6)",
+              boxShadow: "0 20px 60px rgba(0,0,0,0.6)",
             }}
           >
             {/* Header */}
@@ -351,7 +369,7 @@ export function QRPaymentDialog({
                 </div>
                 <div>
                   <div style={{ fontWeight: 700, color: "#f1f5f9", fontSize: "0.9rem" }}>
-                    {step === "qr" ? "Quet QR de thanh toan" : "Thanh toan thanh cong!"}
+                    {step === "qr" ? "Quét QR để thanh toán" : "Thanh toán thành công!"}
                   </div>
                   <div style={{ fontSize: "0.72rem", color: "#64748b", marginTop: "1px" }}>
                     {memberName} · {memberCode}
@@ -371,14 +389,14 @@ export function QRPaymentDialog({
               {loading ? (
                 <div style={{ padding: "40px 0", display: "flex", flexDirection: "column", alignItems: "center", gap: "12px", color: "#94a3b8" }}>
                   <Loader2 size={32} style={{ animation: "spin 1s linear infinite", color: "#22c55e" }} />
-                  <span style={{ fontSize: "0.88rem", fontWeight: 600 }}>Dang khoi tao ma QR...</span>
+                  <span style={{ fontSize: "0.88rem", fontWeight: 600 }}>Đang khởi tạo mã QR...</span>
                 </div>
               ) : error ? (
                 <div style={{ padding: "20px", borderRadius: "12px", background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.2)", color: "#f87171", textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center", gap: "10px" }}>
                   <AlertCircle size={28} />
                   <span style={{ fontSize: "0.85rem" }}>{error}</span>
                   <button onClick={handleOpenAndGenerateQR} style={{ padding: "6px 14px", borderRadius: "6px", background: "rgba(239,68,68,0.2)", border: "1px solid rgba(239,68,68,0.3)", color: "#f87171", cursor: "pointer", fontSize: "0.8rem", fontWeight: 700 }}>
-                    Thu lai
+                    Thử lại
                   </button>
                 </div>
               ) : step === "qr" ? (
@@ -387,7 +405,7 @@ export function QRPaymentDialog({
                   <div style={{ display: "flex", alignItems: "center", gap: "6px", padding: "5px 14px", borderRadius: "999px", background: isExpired ? "rgba(239,68,68,0.1)" : "rgba(234,179,8,0.1)", border: isExpired ? "1px solid rgba(239,68,68,0.25)" : "1px solid rgba(234,179,8,0.25)" }}>
                     <Clock size={13} color={isExpired ? "#f87171" : "#facc15"} />
                     <span style={{ fontSize: "0.78rem", fontWeight: 700, color: isExpired ? "#f87171" : "#facc15" }}>
-                      {isExpired ? "QR da het han" : `Het han sau: ${formatCountdown(countdown)}`}
+                      {isExpired ? "QR đã hết hạn" : `Hết hạn sau: ${formatCountdown(countdown)}`}
                     </span>
                   </div>
 
@@ -398,7 +416,7 @@ export function QRPaymentDialog({
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img
                           src={qrUrl}
-                          alt="QR thanh toan"
+                          alt="QR thanh toán"
                           crossOrigin="anonymous"
                           style={{ width: 190, height: 190, display: "block" }}
                           onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
@@ -421,7 +439,7 @@ export function QRPaymentDialog({
                           }}
                         >
                           <Smartphone size={13} />
-                          Mo App NH
+                          Mở App NH
                         </button>
                         <button
                           onClick={handleSaveQR}
@@ -442,15 +460,15 @@ export function QRPaymentDialog({
                       </div>
                     </div>
                   ) : (
-                    <div style={{ width: 190, height: 190, borderRadius: "14px", background: "rgba(30,41,59,0.6)", border: "2px dashed rgba(34,197,94,0.2)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "8px", color: "#64748b" }}>
-                      <QrCode size={36} />
-                      <span style={{ fontSize: "0.72rem", textAlign: "center", padding: "0 12px" }}>Chua cau hinh ngan hang</span>
+                    <div style={{ width: 180, height: 180, borderRadius: "14px", background: "rgba(30,41,59,0.6)", border: "2px dashed rgba(239,68,68,0.3)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "8px", color: "#64748b" }}>
+                      <AlertCircle size={32} color="#f87171" />
+                      <span style={{ fontSize: "0.72rem", textAlign: "center", padding: "0 12px", color: "#f87171" }}>Chưa cấu hình thông tin ngân hàng trên server</span>
                     </div>
                   )}
 
                   {/* Amount */}
                   <div style={{ textAlign: "center" }}>
-                    <div style={{ fontSize: "0.72rem", color: "#64748b", marginBottom: "2px" }}>So tien can chuyen</div>
+                    <div style={{ fontSize: "0.72rem", color: "#64748b", marginBottom: "2px" }}>Số tiền cần chuyển</div>
                     <div style={{ fontSize: "1.6rem", fontWeight: 900, color: "#22c55e", letterSpacing: "-0.5px" }}>
                       {formatCurrency(totalAmount)}
                     </div>
@@ -459,7 +477,7 @@ export function QRPaymentDialog({
                   {/* Transfer Content */}
                   <div style={{ width: "100%" }}>
                     <div style={{ fontSize: "0.7rem", color: "#64748b", marginBottom: "5px", textAlign: "center" }}>
-                      Noi dung chuyen khoan (bat buoc dung)
+                      Nội dung chuyển khoản (bắt buộc đúng)
                     </div>
                     <div style={{ display: "flex", alignItems: "center", gap: "8px", padding: "9px 12px", borderRadius: "10px", background: "rgba(34,197,94,0.06)", border: "1px solid rgba(34,197,94,0.2)" }}>
                       <code style={{ flex: 1, fontSize: "0.92rem", fontWeight: 800, color: "#22c55e", fontFamily: "monospace", letterSpacing: "1px", wordBreak: "break-all" }}>
@@ -470,7 +488,7 @@ export function QRPaymentDialog({
                         style={{ padding: "5px 9px", borderRadius: "6px", background: copied ? "rgba(34,197,94,0.2)" : "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", color: copied ? "#22c55e" : "#94a3b8", cursor: "pointer", display: "flex", alignItems: "center", gap: "4px", fontSize: "0.7rem", fontWeight: 600, flexShrink: 0 }}
                       >
                         {copied ? <CheckCircle size={12} /> : <Copy size={12} />}
-                        {copied ? "Da copy" : "Copy"}
+                        {copied ? "Đã copy" : "Copy"}
                       </button>
                     </div>
                   </div>
@@ -479,12 +497,12 @@ export function QRPaymentDialog({
                   {!isExpired && (
                     <div style={{ display: "flex", alignItems: "center", gap: "8px", padding: "8px 14px", borderRadius: "8px", background: "rgba(234,179,8,0.05)", border: "1px solid rgba(234,179,8,0.15)", width: "100%", justifyContent: "center" }}>
                       <Loader2 size={13} color="#facc15" style={{ animation: "spin 1s linear infinite" }} />
-                      <span style={{ fontSize: "0.76rem", color: "#facc15" }}>Dang cho nhan thanh toan...</span>
+                      <span style={{ fontSize: "0.76rem", color: "#facc15" }}>Đang chờ nhận thanh toán...</span>
                     </div>
                   )}
 
                   <div style={{ fontSize: "0.66rem", color: "#334155", textAlign: "center" }}>
-                    Bundle: <code style={{ color: "#475569" }}>{bundleCode}</code> · {selectedRecordIds.length} khoan
+                    Bundle: <code style={{ color: "#475569" }}>{bundleCode}</code> · {selectedRecordIds.length} khoản
                   </div>
                 </div>
               ) : (
@@ -493,11 +511,11 @@ export function QRPaymentDialog({
                     <CheckCircle size={40} color="#22c55e" />
                   </div>
                   <div>
-                    <div style={{ fontSize: "1.3rem", fontWeight: 800, color: "#f1f5f9", marginBottom: "8px" }}>Da nhan thanh toan!</div>
+                    <div style={{ fontSize: "1.3rem", fontWeight: 800, color: "#f1f5f9", marginBottom: "8px" }}>🎉 Đã nhận thanh toán!</div>
                     <div style={{ fontSize: "0.9rem", color: "#4ade80", fontWeight: 700, marginBottom: "4px" }}>{formatCurrency(totalAmount)}</div>
-                    <div style={{ fontSize: "0.8rem", color: "#64748b" }}>{selectedRecordIds.length} khoan da PAID</div>
+                    <div style={{ fontSize: "0.8rem", color: "#64748b" }}>{selectedRecordIds.length} khoản đã PAID</div>
                   </div>
-                  <div style={{ fontSize: "0.75rem", color: "#475569" }}>Trang se tu dong lam moi...</div>
+                  <div style={{ fontSize: "0.75rem", color: "#475569" }}>Trang sẽ tự động làm mới...</div>
                   <Loader2 size={18} color="#334155" style={{ animation: "spin 1s linear infinite" }} />
                 </div>
               )}

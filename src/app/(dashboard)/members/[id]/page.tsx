@@ -53,10 +53,15 @@ export default async function MemberDetailPage({ params }: Params) {
     include: {
       user: { select: { id: true, name: true, email: true, image: true, phone: true } },
       attendances: {
-        include: { match: true },
+        select: {
+          id: true,
+          status: true,
+          match: { select: { id: true, title: true, matchDate: true, result: true, location: true } },
+        },
         orderBy: { match: { matchDate: "desc" } },
       },
       paymentRecords: {
+        where: { status: { in: ["PENDING", "OVERDUE"] } },
         select: { status: true },
       },
     },

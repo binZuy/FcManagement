@@ -237,70 +237,66 @@ export async function POST(request: NextRequest, { params }: Params) {
 
   const existingRecords: any[] = (paySession as any).paymentRecords ?? [];
 
-  for (const a of active) {
-    const fpH = resolveFeePH({
-      matchType: match.matchType,
-      result: match.result,
-      feeSplitMethod: match.feeSplitMethod || "EQUAL",
-      feeTotal: match.feeTotal,
-      feeDefault: match.feeDefault,
-      feeWinner: match.feeWinner,
-      feeLose: match.feeLose,
-      feeDraw: match.feeDraw,
-      teamSide: a.teamSide,
-      totalHeads,
-      winningHeads,
-      losingHeads,
-    });
+  await Promise.all(
+    active.map(async (a) => {
+      const fpH = resolveFeePH({
+        matchType: match.matchType,
+        result: match.result,
+        feeSplitMethod: match.feeSplitMethod || "EQUAL",
+        feeTotal: match.feeTotal,
+        feeDefault: match.feeDefault,
+        feeWinner: match.feeWinner,
+        feeLose: match.feeLose,
+        feeDraw: match.feeDraw,
+        teamSide: a.teamSide,
+        totalHeads,
+        winningHeads,
+        losingHeads,
+      });
 
-    // Tiền bản thân
-    const selfFee = fpH + (a.isDrinks ? drinksFeePerHead : 0);
-    // Tiền bạn đi cùng
-    const guestFee = (a.guestCount || 0) * fpH + (a.drinksGuestCount || 0) * drinksFeePerHead;
-    // Tổng tiền = bản thân + bạn đi cùng (vì unique constraint chỉ cho 1 record/member)
-    const totalFee = Math.round(selfFee + guestFee);
+      const selfFee = fpH + (a.isDrinks ? drinksFeePerHead : 0);
+      const guestFee = (a.guestCount || 0) * fpH + (a.drinksGuestCount || 0) * drinksFeePerHead;
+      const totalFee = Math.round(selfFee + guestFee);
 
-    // note để UI biết breakdown: "Bạn: 3 người" hoặc null
-    const noteText = (a.guestCount || 0) > 0
-      ? `Bạn: ${a.guestCount} người (+${Math.round(guestFee).toLocaleString("vi-VN")}đ)`
-      : null;
+      const noteText = (a.guestCount || 0) > 0
+        ? `Bạn: ${a.guestCount} người (+${Math.round(guestFee).toLocaleString("vi-VN")}đ)`
+        : null;
 
-    // Cập nhật attendance để đồng bộ
-    await prisma.matchAttendance.update({
-      where: { id: a.id },
-      data: {
-        feeAssigned: fpH * (1 + (a.guestCount || 0)),
-        drinksFeeAssigned: ((a.isDrinks ? 1 : 0) + (a.drinksGuestCount || 0)) * drinksFeePerHead,
-      },
-    });
+      const existingRecord = existingRecords.find(r => r.memberId === a.memberId);
 
-    // Tìm record hiện tại (unique: sessionId + memberId)
-    const existingRecord = existingRecords.find(r => r.memberId === a.memberId);
-
-    if (existingRecord) {
-      if (existingRecord.status !== RecordStatus.PAID) {
-        await prisma.paymentRecord.update({
-          where: { id: existingRecord.id },
-          data: {
-            amountRequired: totalFee,
-            status: totalFee === 0 ? RecordStatus.WAIVED : existingRecord.status,
-            note: noteText,
-          },
-        });
-      }
-    } else {
-
-      await prisma.paymentRecord.create({
+      const attendanceUpdate = prisma.matchAttendance.update({
+        where: { id: a.id },
         data: {
-          sessionId: paySession.id,
-          memberId: a.memberId,
-          amountRequired: totalFee,
-          status: totalFee === 0 ? RecordStatus.WAIVED : RecordStatus.PENDING,
-          note: noteText,
+          feeAssigned: fpH * (1 + (a.guestCount || 0)),
+          drinksFeeAssigned: ((a.isDrinks ? 1 : 0) + (a.drinksGuestCount || 0)) * drinksFeePerHead,
         },
       });
-    }
-  }
+
+      const recordOperation = existingRecord
+        ? (existingRecord.status !== RecordStatus.PAID
+            ? prisma.paymentRecord.update({
+                where: { id: existingRecord.id },
+                data: {
+                  amountRequired: totalFee,
+                  status: totalFee === 0 ? RecordStatus.WAIVED : existingRecord.status,
+                  note: noteText,
+                },
+              })
+            : null)
+        : prisma.paymentRecord.create({
+            data: {
+              sessionId: paySession.id,
+              memberId: a.memberId,
+              amountRequired: totalFee,
+              status: totalFee === 0 ? RecordStatus.WAIVED : RecordStatus.PENDING,
+              note: noteText,
+            },
+          });
+
+      return Promise.all([attendanceUpdate, recordOperation].filter(Boolean));
+    })
+  );
+
 
   return NextResponse.json({ data: paySession }, { status: 200 });
 }

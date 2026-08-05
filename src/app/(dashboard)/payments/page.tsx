@@ -13,6 +13,9 @@ export default async function PaymentsPage() {
     include: {
       user: { select: { name: true, email: true, image: true } },
       paymentRecords: {
+        where: {
+          status: { in: [RecordStatus.PENDING, RecordStatus.OVERDUE] },
+        },
         select: { status: true, amountRequired: true, amountPaid: true },
       },
     },
