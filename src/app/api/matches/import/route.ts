@@ -63,13 +63,24 @@ export async function POST(request: NextRequest) {
       const attendeesA = codesA.length > 0 ? await prisma.member.findMany({ where: { code: { in: codesA } } }) : [];
       const attendeesB = codesB.length > 0 ? await prisma.member.findMany({ where: { code: { in: codesB } } }) : [];
 
-      const mType = item.matchType || MatchType.INTERNAL;
-      
+      const mTypeStr = String(item.matchType ?? "").toUpperCase();
+      const mType = (mTypeStr.includes("EXT") || mTypeStr.includes("GIAO") || mTypeStr.includes("FRIENDLY"))
+        ? MatchType.EXTERNAL
+        : MatchType.INTERNAL;
+
+      let mResult: MatchResult | undefined = undefined;
+      if (item.result) {
+        const rawRes = String(item.result).toUpperCase();
+        if (rawRes.includes("WIN") || rawRes.includes("THANG")) mResult = MatchResult.WIN;
+        else if (rawRes.includes("LOSE") || rawRes.includes("THUA")) mResult = MatchResult.LOSE;
+        else if (rawRes.includes("DRAW") || rawRes.includes("HOA")) mResult = MatchResult.DRAW;
+      }
+
       // Calculate opposite result for Team B (if internal)
       let resultB: MatchResult | undefined = undefined;
-      if (item.result) {
-        if (item.result === MatchResult.WIN) resultB = MatchResult.LOSE;
-        else if (item.result === MatchResult.LOSE) resultB = MatchResult.WIN;
+      if (mResult) {
+        if (mResult === MatchResult.WIN) resultB = MatchResult.LOSE;
+        else if (mResult === MatchResult.LOSE) resultB = MatchResult.WIN;
         else resultB = MatchResult.DRAW;
       }
 
@@ -82,15 +93,15 @@ export async function POST(request: NextRequest) {
             matchDate: date,
             matchType: mType,
             opponentName: item.opponentName || undefined,
-            result: item.result || undefined,
-            status: item.result ? MatchStatus.DONE : MatchStatus.UPCOMING,
+            result: mResult || undefined,
+            status: mResult ? MatchStatus.DONE : MatchStatus.UPCOMING,
             feeTotal: item.feeTotal || null,
             drinksFeeTotal: item.drinksFeeTotal || null,
           },
         });
 
         const attendanceData: any[] = [];
-        
+
         // Calculate fees if feeTotal is provided
         const totalHeads = attendeesA.length + attendeesB.length;
         const feePerHead = (item.feeTotal && totalHeads > 0) ? item.feeTotal / totalHeads : 0;
@@ -103,7 +114,7 @@ export async function POST(request: NextRequest) {
             memberId: member.id,
             status: AttendStatus.ATTENDED,
             teamSide: mType === MatchType.INTERNAL ? TeamSide.TEAM_A : undefined,
-            matchResultForMember: item.result || null,
+            matchResultForMember: mResult || null,
             feeAssigned: feePerHead,
             drinksFeeAssigned: drinksFeePerHead,
           });
@@ -116,7 +127,7 @@ export async function POST(request: NextRequest) {
             memberId: member.id,
             status: AttendStatus.ATTENDED,
             teamSide: mType === MatchType.INTERNAL ? TeamSide.TEAM_B : undefined,
-            matchResultForMember: mType === MatchType.INTERNAL ? resultB : (item.result || null),
+            matchResultForMember: mType === MatchType.INTERNAL ? resultB : (mResult || null),
             feeAssigned: feePerHead,
             drinksFeeAssigned: drinksFeePerHead,
           });

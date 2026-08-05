@@ -73,14 +73,14 @@ function resolveFeePH(params: {
         losingHeads,
       });
     } else {
-      // EXTERNAL – chia đều
+      // FRIENDLY – chia đều
       return totalHeads > 0 ? feeTotal / totalHeads : 0;
     }
   }
 
   // Dùng feeDefault / feeWinner / feeLose / feeDraw
   if (feeDefault || feeWinner || feeLose || feeDraw) {
-    if (matchType === "EXTERNAL") {
+    if (matchType === "FRIENDLY" || matchType === "EXTERNAL") {
       if (result === "WIN") return feeWinner ?? feeDefault ?? 0;
       if (result === "LOSE") return feeLose ?? feeDefault ?? 0;
       if (result === "DRAW") return feeDraw ?? feeDefault ?? 0;

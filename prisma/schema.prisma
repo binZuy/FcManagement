@@ -152,7 +152,8 @@ model MatchSession {
 
 enum MatchType {
   INTERNAL   // Nội bộ
-  EXTERNAL   // Giao hữu / có đối thủ
+  FRIENDLY   // Giao hữu / có đối thủ
+  EXTERNAL   // Tương thích ngược
 }
 
 enum MatchResult {

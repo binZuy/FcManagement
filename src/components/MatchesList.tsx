@@ -26,6 +26,7 @@ interface MatchesListProps {
 
 const MATCH_TYPE_LABELS: Record<string, string> = {
   INTERNAL: "Nội bộ",
+  FRIENDLY: "Giao hữu",
   EXTERNAL: "Giao hữu",
 };
 
@@ -198,7 +199,7 @@ export function MatchesList({ initialMatches }: MatchesListProps) {
           {[
             { key: "ALL", label: "Tất cả" },
             { key: "INTERNAL", label: "Nội bộ" },
-            { key: "EXTERNAL", label: "Giao hữu" },
+            { key: "FRIENDLY", label: "Giao hữu" },
           ].map((opt) => (
             <button
               key={opt.key}

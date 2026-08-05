@@ -107,7 +107,7 @@ export function UnpaidSection({
           }}
         >
           <AlertCircle size={17} />
-          Các trận/khoản chưa đóng ({unpaidRecords.length})
+          Các trận chưa đóng ({unpaidRecords.length})
         </h2>
 
         {/* Nút Tạo QR — full-width trên mobile */}

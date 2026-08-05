@@ -95,12 +95,12 @@ export default function NewMatchPage() {
                 onChange={(e) => setFormData({ ...formData, matchType: e.target.value as MatchType })}
               >
                 <option value="INTERNAL">Nội bộ (Chia đội)</option>
-                <option value="EXTERNAL">Giao hữu (Đá với đội khác)</option>
+                <option value="FRIENDLY">Giao hữu (Đá với đội khác)</option>
               </select>
             </div>
           </div>
 
-          {formData.matchType === "EXTERNAL" && (
+          {formData.matchType === "FRIENDLY" && (
             <div>
               <label className="form-label">Tên đối thủ</label>
               <input

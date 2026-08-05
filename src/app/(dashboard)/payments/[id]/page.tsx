@@ -207,8 +207,8 @@ export default async function MemberPaymentDetailPage({ params }: Params) {
           }}
         >
           {[
-            { label: "Tổng số phiên", value: member.paymentRecords.length },
-            { label: "Đã đóng hoàn thành", value: `${totalPaidCount} phiên` },
+            { label: "Tổng số trận", value: member.paymentRecords.length },
+            { label: "Đã đóng hoàn thành", value: `${totalPaidCount} trận` },
             {
               label: "Tổng số tiền đã đóng",
               value: formatCurrency(totalPaidAmount),
@@ -243,153 +243,24 @@ export default async function MemberPaymentDetailPage({ params }: Params) {
         </div>
       </div>
 
-      {/* Grid details — responsive 1 column on mobile, 2 columns on desktop */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 340px), 1fr))",
-          gap: "24px",
-        }}
-      >
-        {/* Column 1: Unpaid list — Client Component với QR Dialog */}
-        <UnpaidSection
-          memberId={member.id}
-          memberCode={member.code}
-          memberName={member.user.name ?? "Thành viên"}
-          unpaidRecords={unpaidRecords.map((r) => ({
-            id: r.id,
-            amountRequired: r.amountRequired,
-            amountPaid: r.amountPaid,
-            status: r.status,
-            session: {
-              title: r.session.title,
-              code: r.session.code,
-              dueDate: r.session.dueDate,
-            },
-          }))}
-          isAdmin={isAdmin}
-        />
-
-        {/* Column 2: Paid History list */}
-        <div className="glass-card" style={{ padding: "24px" }}>
-          <h2
-            style={{
-              fontSize: "1.05rem",
-              fontWeight: 700,
-              marginBottom: "16px",
-              color: "var(--card-foreground)",
-              display: "flex",
-              alignItems: "center",
-              gap: "8px",
-            }}
-          >
-            <CheckCircle size={18} color="#4ade80" /> Lịch sử đã thanh toán
-          </h2>
-          <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-            {unpaidRecords.length === 0 && (
-              <div
-                style={{
-                  textAlign: "center",
-                  padding: "32px 0",
-                  color: "#4ade80",
-                  fontSize: "0.95rem",
-                  fontWeight: 700,
-                }}
-              >
-                Cảm ơn đã nộp vào quỹ nuôi Duy
-              </div>
-            )}
-            {paidRecords.length === 0 && (
-              <p
-                style={{
-                  color: "var(--muted-foreground)",
-                  fontSize: "0.85rem",
-                  textAlign: "center",
-                  padding: "36px 0",
-                }}
-              >
-                Chưa có lịch sử thanh toán
-              </p>
-            )}
-            {paidRecords.map((r) => {
-              const cfg = RECORD_STATUS[r.status] ?? { label: r.status, cls: "" };
-              return (
-                <div
-                  key={r.id}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "10px",
-                    padding: "10px 12px",
-                    borderRadius: "8px",
-                    background: "rgba(30,41,59,0.3)",
-                  }}
-                >
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div
-                      style={{
-                        fontSize: "0.8rem",
-                        fontWeight: 600,
-                        color: "var(--card-foreground)",
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      {r.session.title}
-                    </div>
-                    <div
-                      style={{
-                        fontSize: "0.7rem",
-                        color: "var(--muted-foreground)",
-                        marginTop: "2px",
-                      }}
-                    >
-                      {r.paidAt ? formatDateTime(r.paidAt) : "Đã hoàn thành"}
-                      {r.paymentMethod && (
-                        <span>
-                          {" "}
-                          ·{" "}
-                          {r.paymentMethod === "BANK_TRANSFER"
-                            ? "Chuyển khoản"
-                            : "Tiền mặt"}
-                        </span>
-                      )}
-                      {r.sepayTx && (
-                        <span style={{ color: "#22c55e" }}> · Sepay ✓</span>
-                      )}
-                    </div>
-                  </div>
-                  <div style={{ textAlign: "right", flexShrink: 0 }}>
-                    <div
-                      style={{
-                        fontSize: "0.82rem",
-                        fontWeight: 700,
-                        color: "#4ade80",
-                      }}
-                    >
-                      {formatCurrency(r.amountPaid)}
-                    </div>
-                    <span
-                      className={cfg.cls}
-                      style={{
-                        display: "inline-block",
-                        marginTop: "3px",
-                        padding: "1px 6px",
-                        borderRadius: "999px",
-                        fontSize: "0.62rem",
-                        fontWeight: 600,
-                      }}
-                    >
-                      {cfg.label}
-                    </span>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      </div>
+      {/* UnpaidSection Component với QR Dialog — Full Width */}
+      <UnpaidSection
+        memberId={member.id}
+        memberCode={member.code}
+        memberName={member.user.name ?? "Thành viên"}
+        unpaidRecords={unpaidRecords.map((r) => ({
+          id: r.id,
+          amountRequired: r.amountRequired,
+          amountPaid: r.amountPaid,
+          status: r.status,
+          session: {
+            title: r.session.title,
+            code: r.session.code,
+            dueDate: r.session.dueDate,
+          },
+        }))}
+        isAdmin={isAdmin}
+      />
     </div>
   );
 }
