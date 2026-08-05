@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
-import { Position } from "@prisma/client";
+import { Position, Role } from "@prisma/client";
 
 // PATCH /api/members/[id] — Chỉnh sửa thông tin profile thành viên
 export async function PATCH(
@@ -24,7 +24,7 @@ export async function PATCH(
       return NextResponse.json({ error: "Thành viên không tồn tại" }, { status: 404 });
     }
 
-    const isAdmin = session.user.role === "ADMIN";
+    const isAdmin = session.user.role === Role.ADMIN;
     const isOwner = session.user.id === member.userId;
 
     if (!isAdmin && !isOwner) {

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
-import { MatchType, MatchResult, Role, MatchStatus, AttendStatus } from "@prisma/client";
+import { MatchType, MatchResult, Role, MatchStatus, AttendStatus, TeamSide } from "@prisma/client";
 
 // POST /api/matches/import
 export async function POST(request: NextRequest) {
@@ -102,7 +102,7 @@ export async function POST(request: NextRequest) {
             matchId: m.id,
             memberId: member.id,
             status: AttendStatus.ATTENDED,
-            teamSide: mType === MatchType.INTERNAL ? "TEAM_A" : null,
+            teamSide: mType === MatchType.INTERNAL ? TeamSide.TEAM_A : undefined,
             matchResultForMember: item.result || null,
             feeAssigned: feePerHead,
             drinksFeeAssigned: drinksFeePerHead,
@@ -115,7 +115,7 @@ export async function POST(request: NextRequest) {
             matchId: m.id,
             memberId: member.id,
             status: AttendStatus.ATTENDED,
-            teamSide: mType === MatchType.INTERNAL ? "TEAM_B" : null,
+            teamSide: mType === MatchType.INTERNAL ? TeamSide.TEAM_B : undefined,
             matchResultForMember: mType === MatchType.INTERNAL ? resultB : (item.result || null),
             feeAssigned: feePerHead,
             drinksFeeAssigned: drinksFeePerHead,

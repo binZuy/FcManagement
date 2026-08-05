@@ -19,8 +19,8 @@ export async function GET(request: NextRequest) {
   });
 
   const matches = rawMatches.sort((a, b) => {
-    if (a.status === "UPCOMING" && b.status !== "UPCOMING") return -1;
-    if (a.status !== "UPCOMING" && b.status === "UPCOMING") return 1;
+    if (a.status === MatchStatus.UPCOMING && b.status !== MatchStatus.UPCOMING) return -1;
+    if (a.status !== MatchStatus.UPCOMING && b.status === MatchStatus.UPCOMING) return 1;
     return new Date(b.matchDate).getTime() - new Date(a.matchDate).getTime();
   });
 

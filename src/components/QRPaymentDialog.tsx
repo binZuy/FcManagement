@@ -55,6 +55,7 @@ export function QRPaymentDialog({
   // Bundle state
   const [bundleId, setBundleId] = useState<string | null>(null);
   const [bundleCode, setBundleCode] = useState<string | null>(null);
+  const [bundleStatus, setBundleStatus] = useState<string | null>(null);
   const [qrContent, setQrContent] = useState<string>("");
   const [qrUrl, setQrUrl] = useState<string | null>(null);
   const [totalAmount, setTotalAmount] = useState(0);
@@ -80,8 +81,8 @@ export function QRPaymentDialog({
       // Ignore
     }
 
-    // Cancel bundle nếu đang PENDING
-    if (bundleId && step === "qr") {
+    // Cancel bundle chỉ khi đang ở trạng thái PENDING
+    if (bundleId && step === "qr" && bundleStatus === "PENDING") {
       try {
         await fetch(`/api/payments/bundles/${bundleId}`, { method: "DELETE" });
       } catch {
@@ -94,10 +95,11 @@ export function QRPaymentDialog({
     setError(null);
     setBundleId(null);
     setBundleCode(null);
+    setBundleStatus(null);
     setQrContent("");
     setQrUrl(null);
     setExpiresAt(null);
-  }, [bundleId, step, cleanup, STORAGE_KEY]);
+  }, [bundleId, step, bundleStatus, cleanup, STORAGE_KEY]);
 
   // Polling & Status Check
   const checkStatusNow = useCallback(async (id: string) => {
@@ -105,6 +107,8 @@ export function QRPaymentDialog({
       const res = await fetch(`/api/payments/bundles/${id}`);
       const data = await res.json();
       const status = data.bundle?.status;
+      // Luôn cập nhật status thực tế từ server
+      if (status) setBundleStatus(status);
       if (status === "PAID") {
         cleanup();
         try {
@@ -209,6 +213,7 @@ export function QRPaymentDialog({
 
       setBundleId(data.bundle.id);
       setBundleCode(data.bundle.bundleCode);
+      setBundleStatus(data.bundle.status ?? "PENDING");
       setQrContent(data.qrContent);
       setQrUrl(data.qrUrl);
       setTotalAmount(data.bundle.totalAmount);
@@ -239,27 +244,35 @@ export function QRPaymentDialog({
 
   const handleDownloadQR = async () => {
     if (!qrUrl) return;
-    try {
-      const fileName = `QR_ThanhToan_${memberCode}_${bundleCode || "FC"}.png`;
-      const response = await fetch(qrUrl);
-      const blob = await response.blob();
+    const fileName = `QR_ThanhToan_${memberCode}_${bundleCode || "FC"}.png`;
 
-      // Kiểm tra nếu thiết bị hỗ trợ chia sẻ/lưu file di động (Web Share API)
+    try {
+      const response = await fetch(qrUrl);
+      if (!response.ok) throw new Error("fetch failed");
+      const blob = await response.blob();
       const file = new File([blob], fileName, { type: "image/png" });
+
+      // Web Share API (mobile): thử share file trước
       if (
-        navigator.share &&
-        navigator.canShare &&
+        typeof navigator.share === "function" &&
+        typeof navigator.canShare === "function" &&
         navigator.canShare({ files: [file] })
       ) {
-        await navigator.share({
-          files: [file],
-          title: "Ảnh QR Thanh Toán",
-          text: `Mã thanh toán ${bundleCode || ""}`,
-        });
-        return;
+        try {
+          await navigator.share({
+            files: [file],
+            title: "Ảnh QR Thanh Toán",
+            text: `Mã thanh toán ${bundleCode || ""}`,
+          });
+          return;
+        } catch (shareErr: any) {
+          // Người dùng huỷ share (AbortError) hoặc lỗi khác → fallback download
+          if (shareErr?.name === "AbortError") return;
+          // fallthrough to download
+        }
       }
 
-      // Phương thức tải xuống chuẩn cho máy tính & browser mặc định
+      // Fallback: tải xuống chuẩn (desktop & mobile browser)
       const blobUrl = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = blobUrl;
@@ -267,8 +280,9 @@ export function QRPaymentDialog({
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-      URL.revokeObjectURL(blobUrl);
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
     } catch {
+      // Last resort: mở ảnh trong tab mới để user tự lưu
       window.open(qrUrl, "_blank");
     }
   };

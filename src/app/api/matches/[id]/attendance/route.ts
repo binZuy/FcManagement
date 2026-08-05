@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
-import { AttendStatus, Role, TeamSide } from "@prisma/client";
+import { AttendStatus, Role, TeamSide, MemberStatus } from "@prisma/client";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -22,7 +22,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
       },
     }),
     prisma.member.findMany({
-      where: { status: "ACTIVE" },
+      where: { status: MemberStatus.ACTIVE },
       include: { user: { select: { name: true, email: true, image: true } } },
       orderBy: { user: { name: "asc" } },
     }),

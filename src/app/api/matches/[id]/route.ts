@@ -228,7 +228,7 @@ export async function POST(request: NextRequest, { params }: Params) {
 
   // Tính lại fee từ đầu để đồng nhất (không phụ thuộc feeAssigned cũ)
   const totalHeads = active.reduce((s, a) => s + 1 + (a.guestCount || 0), 0);
-  const winningTeamSide = match.result === "WIN" ? "TEAM_A" : match.result === "LOSE" ? "TEAM_B" : null;
+  const winningTeamSide = match.result === MatchResult.WIN ? TeamSide.TEAM_A : match.result === MatchResult.LOSE ? TeamSide.TEAM_B : null;
   const winningHeads = winningTeamSide ? active.filter(a => a.teamSide === winningTeamSide).reduce((s, a) => s + 1 + (a.guestCount || 0), 0) : 0;
   const losingHeads = winningTeamSide ? active.filter(a => a.teamSide !== winningTeamSide).reduce((s, a) => s + 1 + (a.guestCount || 0), 0) : 0;
 
@@ -278,7 +278,7 @@ export async function POST(request: NextRequest, { params }: Params) {
     const existingRecord = existingRecords.find(r => r.memberId === a.memberId);
 
     if (existingRecord) {
-      if (existingRecord.status !== "PAID") {
+      if (existingRecord.status !== RecordStatus.PAID) {
         await prisma.paymentRecord.update({
           where: { id: existingRecord.id },
           data: {
@@ -289,6 +289,7 @@ export async function POST(request: NextRequest, { params }: Params) {
         });
       }
     } else {
+
       await prisma.paymentRecord.create({
         data: {
           sessionId: paySession.id,
