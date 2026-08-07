@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, use } from "react";
+import { useState, useEffect, use, useCallback, memo } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, CheckCircle, Save, Users, Trophy, Coffee, Search, CheckSquare, Square, UserCheck, Loader2 } from "lucide-react";
@@ -65,6 +65,256 @@ function Counter({ value, onChange, min = 0, max = 99, disabled = false }: {
     </div>
   );
 }
+
+// Mỗi thẻ thành viên ở Bước 2 (điểm danh) — memo hoá để tick 1 checkbox
+// không kéo theo re-render toàn bộ danh sách.
+const AttendanceItem = memo(function AttendanceItem({
+  member,
+  att,
+  isInternal,
+  onToggleAttended,
+  onGuestCountChange,
+  onTeamSideChange,
+}: {
+  member: any;
+  att: any;
+  isInternal: boolean;
+  onToggleAttended: (memberId: string, checked: boolean) => void;
+  onGuestCountChange: (memberId: string, val: number) => void;
+  onTeamSideChange: (memberId: string, val: string) => void;
+}) {
+  const isAttended = att.status === "ATTENDED";
+
+  return (
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        gap: "8px",
+        padding: "12px",
+        borderRadius: "10px",
+        background: isAttended ? "rgba(34,197,94,0.08)" : "rgba(30,41,59,0.3)",
+        border: isAttended ? "1px solid rgba(34,197,94,0.3)" : "1px solid var(--border)",
+        transition: "all 0.15s ease",
+      }}
+    >
+      {/* Hàng 1: Checkbox Có mặt + Tên + Mã */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px" }}>
+        <label
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "10px",
+            cursor: "pointer",
+            flex: 1,
+            minWidth: 0,
+          }}
+        >
+          <input
+            type="checkbox"
+            checked={isAttended}
+            onChange={(e) => onToggleAttended(member.id, e.target.checked)}
+            style={{
+              width: "18px",
+              height: "18px",
+              accentColor: "var(--primary)",
+              cursor: "pointer",
+              flexShrink: 0,
+            }}
+          />
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div
+              style={{
+                fontWeight: 700,
+                fontSize: "0.88rem",
+                color: isAttended ? "var(--card-foreground)" : "var(--muted-foreground)",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {member.user.name}
+            </div>
+            <div style={{ fontSize: "0.72rem", color: "var(--muted-foreground)" }}>
+              Mã: <span style={{ color: "var(--primary)", fontWeight: 600 }}>{member.code}</span>
+            </div>
+          </div>
+        </label>
+
+        {/* Badge Trạng thái */}
+        <span
+          style={{
+            fontSize: "0.68rem",
+            fontWeight: 700,
+            padding: "2px 8px",
+            borderRadius: "999px",
+            color: isAttended ? "#4ade80" : "var(--muted-foreground)",
+            background: isAttended ? "rgba(34,197,94,0.15)" : "rgba(255,255,255,0.05)",
+            flexShrink: 0,
+          }}
+        >
+          {isAttended ? "Có mặt" : "Vắng"}
+        </span>
+      </div>
+
+      {/* Hàng 2: Số Khách đi cùng & Phân đội */}
+      {isAttended && (
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: "8px",
+            paddingTop: "8px",
+            borderTop: "1px solid rgba(255,255,255,0.06)",
+            marginTop: "2px",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+            <span style={{ fontSize: "0.75rem", color: "var(--muted-foreground)", fontWeight: 600 }}>
+             + Bạn đá:
+            </span>
+            <Counter
+              value={att.guestCount || 0}
+              onChange={(val) => onGuestCountChange(member.id, val)}
+            />
+          </div>
+
+          {isInternal && (
+            <select
+              value={att.teamSide ?? "TEAM_A"}
+              onChange={(e) => onTeamSideChange(member.id, e.target.value)}
+              style={{
+                background: "#1e293b",
+                color: "var(--card-foreground)",
+                border: "1px solid var(--border)",
+                borderRadius: "6px",
+                padding: "2px 6px",
+                fontSize: "0.75rem",
+                fontWeight: 600,
+              }}
+            >
+              <option value="TEAM_A">Đội A</option>
+              <option value="TEAM_B">Đội B</option>
+            </select>
+          )}
+        </div>
+      )}
+    </div>
+  );
+});
+
+// Mỗi thẻ thành viên ở Bước 3 (tiền nước) — memo hoá tương tự AttendanceItem.
+const DrinksItem = memo(function DrinksItem({
+  member,
+  att,
+  onToggleDrinks,
+  onDrinksGuestCountChange,
+}: {
+  member: any;
+  att: any;
+  onToggleDrinks: (memberId: string, checked: boolean) => void;
+  onDrinksGuestCountChange: (memberId: string, val: number) => void;
+}) {
+  const isDrinks = att?.isDrinks ?? false;
+
+  return (
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        gap: "8px",
+        padding: "12px",
+        borderRadius: "10px",
+        background: isDrinks ? "rgba(34,197,94,0.08)" : "rgba(30,41,59,0.3)",
+        border: isDrinks ? "1px solid rgba(34,197,94,0.3)" : "1px solid var(--border)",
+        transition: "all 0.15s ease",
+      }}
+    >
+      {/* Hàng 1: Checkbox Uống nước + Tên + Mã + Badge */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px" }}>
+        <label
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "10px",
+            cursor: "pointer",
+            flex: 1,
+            minWidth: 0,
+          }}
+        >
+          <input
+            type="checkbox"
+            checked={isDrinks}
+            onChange={(e) => onToggleDrinks(member.id, e.target.checked)}
+            style={{
+              width: "18px",
+              height: "18px",
+              accentColor: "var(--primary)",
+              cursor: "pointer",
+              flexShrink: 0,
+            }}
+          />
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div
+              style={{
+                fontWeight: 700,
+                fontSize: "0.88rem",
+                color: isDrinks ? "var(--card-foreground)" : "var(--muted-foreground)",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {member.user.name}
+            </div>
+            <div style={{ fontSize: "0.72rem", color: "var(--muted-foreground)" }}>
+              Mã: <span style={{ color: "var(--primary)", fontWeight: 600 }}>{member.code}</span>
+            </div>
+          </div>
+        </label>
+
+        {/* Badge Trạng thái Uống nước */}
+        <span
+          style={{
+            fontSize: "0.68rem",
+            fontWeight: 700,
+            padding: "2px 8px",
+            borderRadius: "999px",
+            color: isDrinks ? "#4ade80" : "var(--muted-foreground)",
+            background: isDrinks ? "rgba(34,197,94,0.15)" : "rgba(255,255,255,0.05)",
+            flexShrink: 0,
+          }}
+        >
+          {isDrinks ? "Uống nước" : "Không"}
+        </span>
+      </div>
+
+      {/* Hàng 2: Bạn đi cùng uống nước */}
+      {isDrinks && (
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: "8px",
+            paddingTop: "8px",
+            borderTop: "1px solid rgba(255,255,255,0.06)",
+            marginTop: "2px",
+          }}
+        >
+          <span style={{ fontSize: "0.75rem", color: "var(--muted-foreground)", fontWeight: 600 }}>
+            + Bạn uống cùng:
+          </span>
+          <Counter
+            value={att?.drinksGuestCount ?? 0}
+            onChange={(val) => onDrinksGuestCountChange(member.id, val)}
+          />
+        </div>
+      )}
+    </div>
+  );
+});
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -151,6 +401,48 @@ export default function MatchEditPage({ params }: Params) {
     }
     fetchData();
   }, [id]);
+
+  // Callback ổn định (functional update, không phụ thuộc `attendances`) để AttendanceItem/DrinksItem
+  // giữ nguyên props giữa các lần render và React.memo phát huy tác dụng.
+  // Đặt trước early-return `if (loading)` bên dưới để tuân thủ Rules of Hooks.
+  const handleToggleAttended = useCallback((memberId: string, checked: boolean) => {
+    setAttendances((prev) => ({
+      ...prev,
+      [memberId]: {
+        ...(prev[memberId] ?? { memberId, guestCount: 0, drinksGuestCount: 0 }),
+        status: checked ? "ATTENDED" : "ABSENT",
+        isDrinks: checked ? true : false,
+      },
+    }));
+  }, []);
+
+  const handleGuestCountChange = useCallback((memberId: string, val: number) => {
+    setAttendances((prev) => ({
+      ...prev,
+      [memberId]: { ...prev[memberId], guestCount: val },
+    }));
+  }, []);
+
+  const handleTeamSideChange = useCallback((memberId: string, val: string) => {
+    setAttendances((prev) => ({
+      ...prev,
+      [memberId]: { ...prev[memberId], teamSide: val },
+    }));
+  }, []);
+
+  const handleToggleDrinks = useCallback((memberId: string, checked: boolean) => {
+    setAttendances((prev) => ({
+      ...prev,
+      [memberId]: { ...prev[memberId], isDrinks: checked },
+    }));
+  }, []);
+
+  const handleDrinksGuestCountChange = useCallback((memberId: string, val: number) => {
+    setAttendances((prev) => ({
+      ...prev,
+      [memberId]: { ...prev[memberId], drinksGuestCount: val },
+    }));
+  }, []);
 
   if (loading) {
     return (
@@ -569,145 +861,17 @@ export default function MatchEditPage({ params }: Params) {
         >
           {filteredMembersList.map((member) => {
             const att = attendances[member.id] ?? { status: "ABSENT", guestCount: 0, teamSide: null, isDrinks: false };
-            const isAttended = att.status === "ATTENDED";
 
             return (
-              <div
+              <AttendanceItem
                 key={member.id}
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: "8px",
-                  padding: "12px",
-                  borderRadius: "10px",
-                  background: isAttended ? "rgba(34,197,94,0.08)" : "rgba(30,41,59,0.3)",
-                  border: isAttended ? "1px solid rgba(34,197,94,0.3)" : "1px solid var(--border)",
-                  transition: "all 0.15s ease",
-                }}
-              >
-                {/* Hàng 1: Checkbox Có mặt + Tên + Mã */}
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px" }}>
-                  <label
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "10px",
-                      cursor: "pointer",
-                      flex: 1,
-                      minWidth: 0,
-                    }}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={isAttended}
-                      onChange={(e) => {
-                        const checked = e.target.checked;
-                        setAttendances({
-                          ...attendances,
-                          [member.id]: {
-                            ...att,
-                            status: checked ? "ATTENDED" : "ABSENT",
-                            isDrinks: checked ? true : false,
-                          },
-                        });
-                      }}
-                      style={{
-                        width: "18px",
-                        height: "18px",
-                        accentColor: "var(--primary)",
-                        cursor: "pointer",
-                        flexShrink: 0,
-                      }}
-                    />
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div
-                        style={{
-                          fontWeight: 700,
-                          fontSize: "0.88rem",
-                          color: isAttended ? "var(--card-foreground)" : "var(--muted-foreground)",
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
-                          whiteSpace: "nowrap",
-                        }}
-                      >
-                        {member.user.name}
-                      </div>
-                      <div style={{ fontSize: "0.72rem", color: "var(--muted-foreground)" }}>
-                        Mã: <span style={{ color: "var(--primary)", fontWeight: 600 }}>{member.code}</span>
-                      </div>
-                    </div>
-                  </label>
-
-                  {/* Badge Trạng thái */}
-                  <span
-                    style={{
-                      fontSize: "0.68rem",
-                      fontWeight: 700,
-                      padding: "2px 8px",
-                      borderRadius: "999px",
-                      color: isAttended ? "#4ade80" : "var(--muted-foreground)",
-                      background: isAttended ? "rgba(34,197,94,0.15)" : "rgba(255,255,255,0.05)",
-                      flexShrink: 0,
-                    }}
-                  >
-                    {isAttended ? "Có mặt" : "Vắng"}
-                  </span>
-                </div>
-
-                {/* Hàng 2: Số Khách đi cùng & Phân đội */}
-                {isAttended && (
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      gap: "8px",
-                      paddingTop: "8px",
-                      borderTop: "1px solid rgba(255,255,255,0.06)",
-                      marginTop: "2px",
-                    }}
-                  >
-                    <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                      <span style={{ fontSize: "0.75rem", color: "var(--muted-foreground)", fontWeight: 600 }}>
-                       + Bạn đá:
-                      </span>
-                      <Counter
-                        value={att.guestCount || 0}
-                        onChange={(val) =>
-                          setAttendances({
-                            ...attendances,
-                            [member.id]: { ...att, guestCount: val },
-                          })
-                        }
-                      />
-                    </div>
-
-                    {isInternal && (
-                      <select
-                        value={att.teamSide ?? "TEAM_A"}
-                        onChange={(e) =>
-                          setAttendances({
-                            ...attendances,
-                            [member.id]: { ...att, teamSide: e.target.value },
-                          })
-                        }
-                        style={{
-                          background: "#1e293b",
-                          color: "var(--card-foreground)",
-                          border: "1px solid var(--border)",
-                          borderRadius: "6px",
-                          padding: "2px 6px",
-                          fontSize: "0.75rem",
-                          fontWeight: 600,
-                        }}
-                      >
-                        <option value="TEAM_A">Đội A</option>
-                        <option value="TEAM_B">Đội B</option>
-                      </select>
-                    )}
-                  </div>
-                )}
-              </div>
+                member={member}
+                att={att}
+                isInternal={isInternal}
+                onToggleAttended={handleToggleAttended}
+                onGuestCountChange={handleGuestCountChange}
+                onTeamSideChange={handleTeamSideChange}
+              />
             );
           })}
         </div>
@@ -790,118 +954,15 @@ export default function MatchEditPage({ params }: Params) {
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(250px, 1fr))", gap: "10px", maxHeight: "360px", overflowY: "auto", paddingRight: "4px" }}>
             {allMembers
               .filter((m) => attendances[m.id]?.status === "ATTENDED")
-              .map((member) => {
-                const att = attendances[member.id];
-                const isDrinks = att?.isDrinks ?? false;
-
-                return (
-                  <div
-                    key={member.id}
-                    style={{
-                      display: "flex",
-                      flexDirection: "column",
-                      gap: "8px",
-                      padding: "12px",
-                      borderRadius: "10px",
-                      background: isDrinks ? "rgba(34,197,94,0.08)" : "rgba(30,41,59,0.3)",
-                      border: isDrinks ? "1px solid rgba(34,197,94,0.3)" : "1px solid var(--border)",
-                      transition: "all 0.15s ease",
-                    }}
-                  >
-                    {/* Hàng 1: Checkbox Uống nước + Tên + Mã + Badge */}
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px" }}>
-                      <label
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "10px",
-                          cursor: "pointer",
-                          flex: 1,
-                          minWidth: 0,
-                        }}
-                      >
-                        <input 
-                          type="checkbox" 
-                          checked={isDrinks}
-                          onChange={(e) =>
-                            setAttendances({
-                              ...attendances,
-                              [member.id]: { ...att, isDrinks: e.target.checked },
-                            })
-                          }
-                          style={{
-                            width: "18px",
-                            height: "18px",
-                            accentColor: "var(--primary)",
-                            cursor: "pointer",
-                            flexShrink: 0,
-                          }}
-                        />
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <div
-                            style={{
-                              fontWeight: 700,
-                              fontSize: "0.88rem",
-                              color: isDrinks ? "var(--card-foreground)" : "var(--muted-foreground)",
-                              overflow: "hidden",
-                              textOverflow: "ellipsis",
-                              whiteSpace: "nowrap",
-                            }}
-                          >
-                            {member.user.name}
-                          </div>
-                          <div style={{ fontSize: "0.72rem", color: "var(--muted-foreground)" }}>
-                            Mã: <span style={{ color: "var(--primary)", fontWeight: 600 }}>{member.code}</span>
-                          </div>
-                        </div>
-                      </label>
-
-                      {/* Badge Trạng thái Uống nước */}
-                      <span
-                        style={{
-                          fontSize: "0.68rem",
-                          fontWeight: 700,
-                          padding: "2px 8px",
-                          borderRadius: "999px",
-                          color: isDrinks ? "#4ade80" : "var(--muted-foreground)",
-                          background: isDrinks ? "rgba(34,197,94,0.15)" : "rgba(255,255,255,0.05)",
-                          flexShrink: 0,
-                        }}
-                      >
-                        {isDrinks ? "Uống nước" : "Không"}
-                      </span>
-                    </div>
-
-                    {/* Hàng 2: Bạn đi cùng uống nước */}
-                    {isDrinks && (
-                      <div
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "space-between",
-                          gap: "8px",
-                          paddingTop: "8px",
-                          borderTop: "1px solid rgba(255,255,255,0.06)",
-                          marginTop: "2px",
-                        }}
-                      >
-                        <span style={{ fontSize: "0.75rem", color: "var(--muted-foreground)", fontWeight: 600 }}>
-                          + Bạn uống cùng:
-                        </span>
-                        <Counter 
-                          value={att?.drinksGuestCount ?? 0}
-                          onChange={(val) =>
-                            setAttendances({
-                              ...attendances,
-                              [member.id]: { ...att, drinksGuestCount: val },
-                            })
-                          }
-                        />
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
+              .map((member) => (
+                <DrinksItem
+                  key={member.id}
+                  member={member}
+                  att={attendances[member.id]}
+                  onToggleDrinks={handleToggleDrinks}
+                  onDrinksGuestCountChange={handleDrinksGuestCountChange}
+                />
+              ))}
           </div>
         )}
       </div>

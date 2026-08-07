@@ -23,12 +23,14 @@ function createPrismaClient() {
   globalForPrisma.pool = pool;
   const adapter = new PrismaPg(pool);
 
+  const devLog: ("query" | "error" | "warn")[] =
+    process.env.DEBUG_PRISMA_QUERY === "1"
+      ? ["query", "error", "warn"]
+      : ["error", "warn"];
+
   return new PrismaClient({
     adapter,
-    log:
-      process.env.NODE_ENV === "development"
-        ? ["query", "error", "warn"]
-        : ["error"],
+    log: process.env.NODE_ENV === "development" ? devLog : ["error"],
   });
 }
 
