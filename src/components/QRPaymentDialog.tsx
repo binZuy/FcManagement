@@ -55,6 +55,21 @@ function buildClientQRUrl(bankBin: string, accountNo: string, accountName: strin
   return `${base}?${q.toString()}`;
 }
 
+const POPULAR_BANKS = [
+  { code: "vcb", name: "Vietcombank", color: "#4ade80", bg: "rgba(34,197,94,0.14)", border: "rgba(34,197,94,0.3)" },
+  { code: "mb", name: "MB Bank", color: "#60a5fa", bg: "rgba(96,165,250,0.14)", border: "rgba(96,165,250,0.3)" },
+  { code: "tcb", name: "Techcombank", color: "#f87171", bg: "rgba(239,68,68,0.14)", border: "rgba(239,68,68,0.3)" },
+  { code: "bidv", name: "BIDV", color: "#38bdf8", bg: "rgba(56,189,248,0.14)", border: "rgba(56,189,248,0.3)" },
+  { code: "vpb", name: "VPBank", color: "#4ade80", bg: "rgba(34,197,94,0.14)", border: "rgba(34,197,94,0.3)" },
+  { code: "tpb", name: "TPBank", color: "#c084fc", bg: "rgba(192,132,252,0.14)", border: "rgba(192,132,252,0.3)" },
+  { code: "icb", name: "VietinBank", color: "#60a5fa", bg: "rgba(96,165,250,0.14)", border: "rgba(96,165,250,0.3)" },
+  { code: "agb", name: "Agribank", color: "#f87171", bg: "rgba(239,68,68,0.14)", border: "rgba(239,68,68,0.3)" },
+  { code: "acb", name: "ACB", color: "#38bdf8", bg: "rgba(56,189,248,0.14)", border: "rgba(56,189,248,0.3)" },
+  { code: "stb", name: "Sacombank", color: "#60a5fa", bg: "rgba(96,165,250,0.14)", border: "rgba(96,165,250,0.3)" },
+  { code: "vib", name: "VIB", color: "#38bdf8", bg: "rgba(56,189,248,0.14)", border: "rgba(56,189,248,0.3)" },
+  { code: "momo", name: "MoMo", color: "#f472b6", bg: "rgba(244,114,182,0.14)", border: "rgba(244,114,182,0.3)" },
+];
+
 export function QRPaymentDialog({
   memberId,
   memberCode,
@@ -68,6 +83,7 @@ export function QRPaymentDialog({
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [showBankPicker, setShowBankPicker] = useState(false);
 
   const [bundleId, setBundleId] = useState<string | null>(null);
   const [bundleCode, setBundleCode] = useState<string | null>(null);
@@ -313,14 +329,17 @@ const BANK_APP_MAP: Record<string, string> = {
     }
   };
 
-  const handleOpenBankApp = () => {
+  const handleSelectBankApp = (appCode: string) => {
     if (!BANK_BIN || !ACCOUNT_NO) return;
     const encodedContent = encodeURIComponent(qrContent);
     const encodedName = encodeURIComponent(process.env.NEXT_PUBLIC_ACCOUNT_NAME || "FC Management");
-    // Cú pháp VietQR Deeplink linh hoạt (bỏ app= để VietQR tự hiển thị trang chọn app ngân hàng của người dùng trên mobile):
-    // https://dl.vietqr.io/pay?ba=<ACCOUNT>@<BIN>&am=<AMOUNT>&tn=<NOTE>&bn=<NAME>
-    const url = `https://dl.vietqr.io/pay?ba=${ACCOUNT_NO}@${BANK_BIN}&am=${totalAmount}&tn=${encodedContent}&bn=${encodedName}`;
+    const url = `https://dl.vietqr.io/pay?app=${appCode}&ba=${ACCOUNT_NO}@${BANK_BIN}&am=${totalAmount}&tn=${encodedContent}&bn=${encodedName}`;
     window.open(url, "_blank", "noopener,noreferrer");
+    setShowBankPicker(false);
+  };
+
+  const handleOpenBankApp = () => {
+    setShowBankPicker(true);
   };
 
   const isExpired = countdown <= 0;
@@ -557,6 +576,106 @@ const BANK_APP_MAP: Record<string, string> = {
                   <Loader2 size={18} color="#334155" style={{ animation: "spin 1s linear infinite" }} />
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal chọn App Ngân Hàng */}
+      {showBankPicker && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.85)",
+            backdropFilter: "blur(8px)",
+            zIndex: 10000,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "16px",
+          }}
+          onClick={(e) => { if (e.target === e.currentTarget) setShowBankPicker(false); }}
+        >
+          <div
+            style={{
+              background: "#0f172a",
+              border: "1px solid rgba(34,197,94,0.3)",
+              borderRadius: "18px",
+              width: "100%",
+              maxWidth: "380px",
+              maxHeight: "85dvh",
+              overflow: "hidden",
+              display: "flex",
+              flexDirection: "column",
+              boxShadow: "0 25px 60px rgba(0,0,0,0.7)",
+            }}
+          >
+            {/* Header */}
+            <div
+              style={{
+                padding: "16px 18px",
+                borderBottom: "1px solid rgba(255,255,255,0.08)",
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                background: "rgba(34,197,94,0.06)",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                <Smartphone size={20} color="#22c55e" />
+                <div>
+                  <div style={{ fontWeight: 800, color: "#f1f5f9", fontSize: "0.95rem" }}>
+                    Chọn App Ngân Hàng của bạn
+                  </div>
+                  <div style={{ fontSize: "0.72rem", color: "#94a3b8", marginTop: "2px" }}>
+                    Tự động điền số tiền & nội dung khi mở app
+                  </div>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowBankPicker(false)}
+                style={{
+                  width: 32,
+                  height: 32,
+                  borderRadius: "8px",
+                  background: "rgba(255,255,255,0.06)",
+                  border: "1px solid rgba(255,255,255,0.1)",
+                  color: "#94a3b8",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            {/* Grid Ngân hàng */}
+            <div style={{ flex: 1, overflowY: "auto", padding: "14px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+              {POPULAR_BANKS.map((b) => (
+                <button
+                  key={b.code}
+                  onClick={() => handleSelectBankApp(b.code)}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "10px",
+                    padding: "12px 14px",
+                    borderRadius: "12px",
+                    background: b.bg,
+                    border: `1px solid ${b.border}`,
+                    color: "white",
+                    cursor: "pointer",
+                    textAlign: "left",
+                    transition: "all 0.15s ease",
+                  }}
+                >
+                  <div style={{ width: 8, height: 8, borderRadius: "50%", background: b.color, flexShrink: 0 }} />
+                  <span style={{ fontSize: "0.85rem", fontWeight: 700, color: "#f1f5f9", flex: 1 }}>{b.name}</span>
+                </button>
+              ))}
             </div>
           </div>
         </div>
