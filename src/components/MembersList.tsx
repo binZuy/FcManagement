@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { Users, Search, X, ChevronRight } from "lucide-react";
+import { formatDate } from "@/lib/utils";
 
 interface MemberData {
   id: string;
@@ -41,13 +42,7 @@ const STATUS_LABELS: Record<string, { label: string; color: string; bg: string }
   SUSPENDED: { label: "Tạm ngừng", color: "#f87171", bg: "rgba(239,68,68,0.12)" },
 };
 
-function formatDate(date: Date | string): string {
-  return new Intl.DateTimeFormat("vi-VN", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  }).format(new Date(date));
-}
+
 
 export function MembersList({ initialMembers, isAdmin }: MembersListProps) {
   const [search, setSearch] = useState("");

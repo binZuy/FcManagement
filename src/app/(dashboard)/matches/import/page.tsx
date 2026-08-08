@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, Upload, FileSpreadsheet, AlertCircle, CheckCircle2 } from "lucide-react";
 import Papa from "papaparse";
+import { formatDateToYYYYMMDD } from "@/lib/utils";
 
 const TEMPLATE_HEADERS = ["Tên trận", "Ngày (YYYY-MM-DD)", "Loại trận (INTERNAL/FRIENDLY)", "Đối thủ", "Kết quả (WIN/LOSE/DRAW)", "Mã Đội A", "Mã Đội B", "Tổng tiền sân", "Tổng tiền nước"];
 
@@ -93,7 +94,7 @@ export default function MatchesImportPage() {
             const drinksFeeTotalStr = findVal(row, ["tongtiennuoc", "tiennuoc", "nuoc", "drinksfeetotal"]);
 
             if (!title && matchDate) title = `Trận ngày ${matchDate}`;
-            if (title && !matchDate) matchDate = new Date().toISOString().slice(0, 10);
+            if (title && !matchDate) matchDate = formatDateToYYYYMMDD(new Date());
 
             return {
               title: title || "",

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, Save, Loader2 } from "lucide-react";
 import { MatchType } from "@prisma/client";
+import { formatDateTimeLocal } from "@/lib/utils";
 
 export default function NewMatchPage() {
   const router = useRouter();
@@ -13,7 +14,7 @@ export default function NewMatchPage() {
 
   const [formData, setFormData] = useState({
     title: "",
-    matchDate: new Date().toISOString().slice(0, 16),
+    matchDate: formatDateTimeLocal(),
     location: "",
     matchType: "INTERNAL" as MatchType,
     opponentName: "",

@@ -5,6 +5,7 @@ import { Plus, List, ChevronLeft, ChevronRight, Calendar as CalendarIcon, Rotate
 import { startOfMonth, endOfMonth, addMonths, subMonths, format, parse, getDaysInMonth, getDay, isSameDay } from "date-fns";
 import { MatchesList } from "@/components/MatchesList";
 import { MonthPicker } from "@/components/MonthPicker";
+import { formatDateToYYYYMMDD } from "@/lib/utils";
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
   UPCOMING: { label: "Sắp diễn ra", color: "#60a5fa", bg: "rgba(96,165,250,0.12)" },
@@ -61,7 +62,8 @@ export default async function MatchesPage({ searchParams }: { searchParams: Prom
   
   const days = Array.from({ length: daysInMonth }, (_, i) => {
     const d = new Date(currentMonthDate.getFullYear(), currentMonthDate.getMonth(), i + 1);
-    const dayMatches = matches.filter(m => isSameDay(new Date(m.matchDate), d));
+    const dStr = formatDateToYYYYMMDD(d);
+    const dayMatches = matches.filter(m => formatDateToYYYYMMDD(m.matchDate) === dStr);
     return { date: d, matches: dayMatches };
   });
 

@@ -65,7 +65,7 @@ export async function POST(request: NextRequest) {
 
       const mTypeStr = String(item.matchType ?? "").toUpperCase();
       const mType = (mTypeStr.includes("EXT") || mTypeStr.includes("GIAO") || mTypeStr.includes("FRIENDLY"))
-        ? MatchType.EXTERNAL
+        ? MatchType.FRIENDLY
         : MatchType.INTERNAL;
 
       let mResult: MatchResult | undefined = undefined;

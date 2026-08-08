@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { List, Search, MapPin, ChevronLeft, ChevronRight, CalendarDays, X, Calendar } from "lucide-react";
+import { formatDateToYYYYMMDD } from "@/lib/utils";
 
 interface MatchData {
   id: string;
@@ -65,12 +66,15 @@ export function MatchesList({ initialMatches }: MatchesListProps) {
     // Lọc ngày cụ thể
     let dateMatch = true;
     if (selectedDate) {
-      const matchDateStr = new Date(match.matchDate).toISOString().split("T")[0];
+      const matchDateStr = formatDateToYYYYMMDD(match.matchDate);
       dateMatch = matchDateStr === selectedDate;
     }
 
     // Lọc loại trận
-    const typeMatch = filterType === "ALL" || match.matchType === filterType;
+    const typeMatch =
+      filterType === "ALL" ||
+      match.matchType === filterType ||
+      (filterType === "FRIENDLY" && match.matchType === "EXTERNAL");
 
     return searchMatch && dateMatch && typeMatch;
   });

@@ -50,8 +50,8 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           });
         }
 
-        // TỰ ĐỘNG TẠO MEMBER PROFILE NẾU CHƯA CÓ (áp dụng cho Admin và AllowedEmails)
-        if (dbUser && !dbUser.member) {
+        // TỰ ĐỘNG TẠO MEMBER PROFILE NẾU CHƯA CÓ (chỉ áp dụng cho MEMBER thường, không áp dụng cho ADMIN thuần)
+        if (dbUser && dbUser.role === "MEMBER" && !dbUser.member) {
           const { generateMemberCode } = await import("@/lib/utils");
           const baseCode = generateMemberCode(dbUser.name || "MB");
           const randSuffix = Math.floor(100 + Math.random() * 900);
