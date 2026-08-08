@@ -32,7 +32,12 @@ export default async function MatchesPage({ searchParams }: { searchParams: Prom
           lte: endOfMonth(currentMonthDate),
         }
       },
-      include: { _count: { select: { attendances: true } } },
+      include: {
+        attendances: {
+          where: { status: { in: ["ATTENDED", "LATE"] } },
+          select: { guestCount: true },
+        },
+      },
       orderBy: { matchDate: "asc" },
     });
   } else {
@@ -44,7 +49,12 @@ export default async function MatchesPage({ searchParams }: { searchParams: Prom
 
     const rawMatches = await prisma.matchSession.findMany({
       where: dateQuery ? { matchDate: dateQuery } : undefined,
-      include: { _count: { select: { attendances: true } } },
+      include: {
+        attendances: {
+          where: { status: { in: ["ATTENDED", "LATE"] } },
+          select: { guestCount: true },
+        },
+      },
       orderBy: { matchDate: "desc" },
     });
     
@@ -192,7 +202,10 @@ export default async function MatchesPage({ searchParams }: { searchParams: Prom
       {view === "list" ? (
         <MatchesList initialMatches={matches.map(m => ({
           ...m,
-          matchDate: m.matchDate.toISOString()
+          matchDate: m.matchDate.toISOString(),
+          _count: {
+            attendances: m.attendances.reduce((sum, a) => sum + 1 + (a.guestCount || 0), 0)
+          }
         }))} />
       ) : (
         /* Calendar View Responsive Container */

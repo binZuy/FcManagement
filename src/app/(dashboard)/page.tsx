@@ -278,7 +278,11 @@ export default async function DashboardPage() {
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "12px" }}>
                 <div>
                   <span style={{ fontSize: "0.75rem", fontWeight: 700, color: "#60a5fa", textTransform: "uppercase", letterSpacing: "0.5px" }}>
-                    {data.upcomingMatch.matchType === "INTERNAL" ? "Trận Nội Bộ" : `Giao Hữu vs ${data.upcomingMatch.opponentName}`}
+                    {data.upcomingMatch.matchType === "INTERNAL" 
+                      ? "Trận Nội Bộ" 
+                      : data.upcomingMatch.opponentName 
+                        ? `Giao Hữu vs ${data.upcomingMatch.opponentName}` 
+                        : "Trận Giao Hữu"}
                   </span>
                   <h3 style={{ fontSize: "1.25rem", fontWeight: 800, color: "#f1f5f9", marginTop: "2px" }}>
                     {data.upcomingMatch.title}

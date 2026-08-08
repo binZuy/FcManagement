@@ -97,7 +97,11 @@ export default async function MatchDetailPage({ params }: Params) {
           <div>
             <div style={{ fontSize: "0.75rem", color: "var(--muted-foreground)", marginBottom: "2px" }}>Loại trận</div>
             <div style={{ fontWeight: 700, fontSize: "0.9rem", color: "var(--card-foreground)" }}>
-              {match.matchType === "INTERNAL" ? "Nội bộ" : `Giao hữu (vs ${match.opponentName})`}
+              {match.matchType === "INTERNAL" 
+                ? "Nội bộ" 
+                : match.opponentName 
+                  ? `Giao hữu (vs ${match.opponentName})` 
+                  : "Giao hữu"}
             </div>
           </div>
           <div>

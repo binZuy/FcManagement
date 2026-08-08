@@ -412,6 +412,7 @@ export default function MatchEditPage({ params }: Params) {
         ...(prev[memberId] ?? { memberId, guestCount: 0, drinksGuestCount: 0 }),
         status: checked ? "ATTENDED" : "ABSENT",
         isDrinks: checked ? true : false,
+        ...(checked ? {} : { guestCount: 0, drinksGuestCount: 0 }),
       },
     }));
   }, []);
@@ -419,7 +420,11 @@ export default function MatchEditPage({ params }: Params) {
   const handleGuestCountChange = useCallback((memberId: string, val: number) => {
     setAttendances((prev) => ({
       ...prev,
-      [memberId]: { ...prev[memberId], guestCount: val },
+      [memberId]: {
+        ...prev[memberId],
+        guestCount: val,
+        drinksGuestCount: val,
+      },
     }));
   }, []);
 
@@ -433,7 +438,11 @@ export default function MatchEditPage({ params }: Params) {
   const handleToggleDrinks = useCallback((memberId: string, checked: boolean) => {
     setAttendances((prev) => ({
       ...prev,
-      [memberId]: { ...prev[memberId], isDrinks: checked },
+      [memberId]: {
+        ...prev[memberId],
+        isDrinks: checked,
+        drinksGuestCount: checked ? (prev[memberId]?.drinksGuestCount ?? prev[memberId]?.guestCount ?? 0) : 0,
+      },
     }));
   }, []);
 
@@ -521,7 +530,15 @@ export default function MatchEditPage({ params }: Params) {
   // Đếm số lượng
   const totalAttendedCount = Object.values(attendances).filter((a) => a.status === "ATTENDED").length;
   const totalGuestsCount = Object.values(attendances).reduce((sum, a) => sum + (a.status === "ATTENDED" ? (a.guestCount || 0) : 0), 0);
-  const totalDrinksCount = Object.values(attendances).filter((a) => a.status === "ATTENDED" && a.isDrinks).length;
+  const teamAHeads = Object.values(attendances)
+    .filter((a) => a.status === "ATTENDED" && (a.teamSide === "TEAM_A" || !a.teamSide))
+    .reduce((sum, a) => sum + 1 + (a.guestCount || 0), 0);
+  const teamBHeads = Object.values(attendances)
+    .filter((a) => a.status === "ATTENDED" && a.teamSide === "TEAM_B")
+    .reduce((sum, a) => sum + 1 + (a.guestCount || 0), 0);
+  const totalDrinksMemberCount = Object.values(attendances).filter((a) => a.status === "ATTENDED" && a.isDrinks).length;
+  const totalDrinksGuestsCount = Object.values(attendances).reduce((sum, a) => sum + (a.status === "ATTENDED" && a.isDrinks ? (a.drinksGuestCount || 0) : 0), 0);
+  const totalDrinksCount = totalDrinksMemberCount + totalDrinksGuestsCount;
 
   // 1. LUỒNG 1: LƯU THAY ĐỔI / ĐIỂM DANH NHÁP (Giữ nguyên trạng thái UPCOMING, chưa đổi DONE, chưa tạo phiên tính tiền)
   const handleSaveDraft = async () => {
@@ -775,6 +792,11 @@ export default function MatchEditPage({ params }: Params) {
             <UserCheck size={20} color="var(--primary)" />
             <h2 style={{ fontSize: "1.1rem", fontWeight: 700, color: "var(--card-foreground)" }}>
               Bước 2: Điểm danh thành viên ({totalAttendedCount} TV {totalGuestsCount > 0 ? `+ ${totalGuestsCount} bạn` : ""})
+              {isInternal && totalAttendedCount > 0 && (
+                <span style={{ fontSize: "0.82rem", fontWeight: 600, color: "var(--muted-foreground)", marginLeft: "8px" }}>
+                  (🅰️ Đội A: {teamAHeads} suất · 🅱️ Đội B: {teamBHeads} suất)
+                </span>
+              )}
             </h2>
           </div>
 
@@ -883,7 +905,7 @@ export default function MatchEditPage({ params }: Params) {
           <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
             <Coffee size={20} color="var(--primary)" />
             <h2 style={{ fontSize: "1.1rem", fontWeight: 700, color: "var(--card-foreground)" }}>
-              Bước 3: Tiền nước ({totalDrinksCount} TV uống nước)
+              Bước 3: Tiền nước ({totalDrinksMemberCount} TV {totalDrinksGuestsCount > 0 ? `+ ${totalDrinksGuestsCount} bạn` : ""} uống)
             </h2>
           </div>
 

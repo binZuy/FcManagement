@@ -126,21 +126,25 @@ async function handleUpdateMatch(request: NextRequest, { params }: Params) {
     },
   });
 
+  const getSide = (a: { teamSide?: TeamSide | null }) => a.teamSide ?? TeamSide.TEAM_A;
   const active = match.attendances.filter(a => a.status === AttendStatus.ATTENDED || a.status === AttendStatus.LATE);
   const totalHeads = active.reduce((s, a) => s + 1 + (a.guestCount || 0), 0);
   const winningTeamSide = result === "WIN" ? TeamSide.TEAM_A : result === "LOSE" ? TeamSide.TEAM_B : null;
-  const winningHeads = winningTeamSide ? active.filter(a => a.teamSide === winningTeamSide).reduce((s, a) => s + 1 + (a.guestCount || 0), 0) : 0;
-  const losingHeads = winningTeamSide ? active.filter(a => a.teamSide !== winningTeamSide).reduce((s, a) => s + 1 + (a.guestCount || 0), 0) : 0;
+  const losingTeamSide = winningTeamSide === TeamSide.TEAM_A ? TeamSide.TEAM_B : winningTeamSide === TeamSide.TEAM_B ? TeamSide.TEAM_A : null;
+
+  const winningHeads = winningTeamSide ? active.filter(a => getSide(a) === winningTeamSide).reduce((s, a) => s + 1 + (a.guestCount || 0), 0) : 0;
+  const losingHeads = losingTeamSide ? active.filter(a => getSide(a) === losingTeamSide).reduce((s, a) => s + 1 + (a.guestCount || 0), 0) : 0;
 
   const drinkHeads = active.reduce((s, a) => s + (a.isDrinks ? 1 : 0) + (a.drinksGuestCount || 0), 0);
   const drinksFeePerHead = drinkHeads > 0 && updated.drinksFeeTotal ? updated.drinksFeeTotal / drinkHeads : 0;
 
   if (active.length > 0) {
     await Promise.all(active.map(a => {
+      const side = getSide(a);
       let memberResult: MatchResult | null = null;
       if (result) {
-        if (a.teamSide === TeamSide.TEAM_A) memberResult = result as MatchResult;
-        else if (a.teamSide === TeamSide.TEAM_B) {
+        if (side === TeamSide.TEAM_A) memberResult = result as MatchResult;
+        else if (side === TeamSide.TEAM_B) {
           if (result === "WIN") memberResult = MatchResult.LOSE;
           else if (result === "LOSE") memberResult = MatchResult.WIN;
           else memberResult = MatchResult.DRAW;
@@ -156,7 +160,7 @@ async function handleUpdateMatch(request: NextRequest, { params }: Params) {
         feeWinner: updated.feeWinner,
         feeLose: updated.feeLose,
         feeDraw: updated.feeDraw,
-        teamSide: a.teamSide,
+        teamSide: side,
         totalHeads,
         winningHeads,
         losingHeads,
@@ -226,11 +230,13 @@ export async function POST(request: NextRequest, { params }: Params) {
     return NextResponse.json({ data: paySession, warning: "Chưa có thành viên điểm danh" }, { status: 200 });
   }
 
-  // Tính lại fee từ đầu để đồng nhất (không phụ thuộc feeAssigned cũ)
+  const getSide = (a: { teamSide?: TeamSide | null }) => a.teamSide ?? TeamSide.TEAM_A;
   const totalHeads = active.reduce((s, a) => s + 1 + (a.guestCount || 0), 0);
   const winningTeamSide = match.result === MatchResult.WIN ? TeamSide.TEAM_A : match.result === MatchResult.LOSE ? TeamSide.TEAM_B : null;
-  const winningHeads = winningTeamSide ? active.filter(a => a.teamSide === winningTeamSide).reduce((s, a) => s + 1 + (a.guestCount || 0), 0) : 0;
-  const losingHeads = winningTeamSide ? active.filter(a => a.teamSide !== winningTeamSide).reduce((s, a) => s + 1 + (a.guestCount || 0), 0) : 0;
+  const losingTeamSide = winningTeamSide === TeamSide.TEAM_A ? TeamSide.TEAM_B : winningTeamSide === TeamSide.TEAM_B ? TeamSide.TEAM_A : null;
+
+  const winningHeads = winningTeamSide ? active.filter(a => getSide(a) === winningTeamSide).reduce((s, a) => s + 1 + (a.guestCount || 0), 0) : 0;
+  const losingHeads = losingTeamSide ? active.filter(a => getSide(a) === losingTeamSide).reduce((s, a) => s + 1 + (a.guestCount || 0), 0) : 0;
 
   const drinkHeads = active.reduce((s, a) => s + (a.isDrinks ? 1 : 0) + (a.drinksGuestCount || 0), 0);
   const drinksFeePerHead = drinkHeads > 0 && match.drinksFeeTotal ? match.drinksFeeTotal / drinkHeads : 0;
@@ -239,6 +245,7 @@ export async function POST(request: NextRequest, { params }: Params) {
 
   await Promise.all(
     active.map(async (a) => {
+      const side = getSide(a);
       const fpH = resolveFeePH({
         matchType: match.matchType,
         result: match.result,
@@ -248,7 +255,7 @@ export async function POST(request: NextRequest, { params }: Params) {
         feeWinner: match.feeWinner,
         feeLose: match.feeLose,
         feeDraw: match.feeDraw,
-        teamSide: a.teamSide,
+        teamSide: side,
         totalHeads,
         winningHeads,
         losingHeads,
