@@ -5,6 +5,8 @@ import Link from "next/link";
 import { ArrowLeft, Users, UserCheck } from "lucide-react";
 import { notFound } from "next/navigation";
 import { RecordStatus } from "@prisma/client";
+import { MarkPaidButton } from "@/components/MarkPaidButton";
+import { PaymentSessionDetailView } from "@/components/PaymentSessionDetailView";
 
 const RECORD_STATUS: Record<string, { label: string; cls: string; color: string; bg: string }> = {
   PENDING: { label: "Chưa đóng", cls: "badge-pending", color: "#facc15", bg: "rgba(250,204,21,0.12)" },
@@ -17,6 +19,8 @@ type Params = { params: Promise<{ id: string }> };
 
 export default async function PaymentDetailPage({ params }: Params) {
   const { id } = await params;
+  const userSession = await auth();
+  const isAdmin = userSession?.user?.role === "ADMIN";
   const session = await prisma.paymentSession.findUnique({
     where: { id },
     include: {
@@ -174,133 +178,11 @@ export default async function PaymentDetailPage({ params }: Params) {
       </div>
 
       {/* Payment Records Table & Mobile Cards */}
-      <div className="glass-card" style={{ padding: "20px" }}>
-        <h2 style={{ fontSize: "1.05rem", fontWeight: 700, marginBottom: "16px", color: "var(--card-foreground)" }}>
-          Danh sách khoản đóng ({displayItems.length} khoản bao gồm bạn đi cùng)
-        </h2>
-
-        {/* 💻 DESKTOP TABLE */}
-        <div className="desktop-only-table">
-          <table className="data-table" style={{ width: "100%" }}>
-            <thead>
-              <tr>
-                <th>Thành viên / Đối tượng</th>
-                <th>Số tiền</th>
-                <th>Trạng thái</th>
-                <th>Ngày đóng</th>
-                <th>Hình thức</th>
-              </tr>
-            </thead>
-            <tbody>
-              {displayItems.map((record) => {
-                const st = RECORD_STATUS[record.status] ?? RECORD_STATUS.PENDING;
-
-                return (
-                  <tr key={record.id}>
-                    <td>
-                      <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                        {record.image ? (
-                          <img src={record.image} alt="" style={{ width: 34, height: 34, borderRadius: "50%" }} />
-                        ) : (
-                          <div style={{ width: 34, height: 34, borderRadius: "50%", background: record.isGuest ? "#fb923c" : "var(--gradient-primary)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "13px", fontWeight: 700, color: "white" }}>
-                            {record.isGuest ? "👥" : record.name?.[0]?.toUpperCase()}
-                          </div>
-                        )}
-                        <div>
-                          <div style={{ fontSize: "0.88rem", fontWeight: 700, color: record.isGuest ? "#fb923c" : "var(--card-foreground)" }}>
-                            {record.name}
-                          </div>
-                          <div style={{ fontSize: "0.72rem", color: "var(--muted-foreground)" }}>
-                            {record.isGuest ? record.guestNote : `Mã: ${record.code}`}
-                          </div>
-                        </div>
-                      </div>
-                    </td>
-                    <td>
-                      <div style={{ fontWeight: 800, color: "var(--card-foreground)", fontSize: "0.9rem" }}>
-                        {formatCurrency(record.amountRequired)}
-                      </div>
-                      {record.amountPaid > 0 && record.amountPaid !== record.amountRequired && (
-                        <div style={{ fontSize: "0.72rem", color: "#4ade80" }}>
-                          Đã đóng: {formatCurrency(record.amountPaid)}
-                        </div>
-                      )}
-                    </td>
-                    <td>
-                      <span style={{ padding: "3px 10px", borderRadius: "999px", fontSize: "0.72rem", fontWeight: 700, color: st.color, background: st.bg }}>
-                        {st.label}
-                      </span>
-                    </td>
-                    <td style={{ color: "var(--muted-foreground)", fontSize: "0.8rem" }}>
-                      {record.paidAt ? formatDateTime(record.paidAt) : "—"}
-                    </td>
-                    <td style={{ fontSize: "0.8rem", color: "var(--muted-foreground)" }}>
-                      {record.paymentMethod === "BANK_TRANSFER"
-                        ? record.sepayTx
-                          ? `🔗 SePay (${record.sepayTx.gateway})`
-                          : "💳 Chuyển khoản"
-                        : record.paymentMethod === "CASH"
-                        ? "💵 Tiền mặt"
-                        : "—"}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-
-        {/* 📱 MOBILE COMPACT CARDS */}
-        <div className="mobile-only-cards" style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-          {displayItems.map((record) => {
-            const st = RECORD_STATUS[record.status] ?? RECORD_STATUS.PENDING;
-
-            return (
-              <div
-                key={record.id}
-                style={{
-                  padding: "12px 14px",
-                  borderRadius: "10px",
-                  background: "rgba(30,41,59,0.3)",
-                  border: record.isGuest ? "1px solid rgba(251,146,60,0.3)" : "1px solid var(--border)",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  gap: "10px",
-                }}
-              >
-                <div style={{ display: "flex", alignItems: "center", gap: "10px", flex: 1, minWidth: 0 }}>
-                  {record.image ? (
-                    <img src={record.image} alt="" style={{ width: 36, height: 36, borderRadius: "50%", flexShrink: 0 }} />
-                  ) : (
-                    <div style={{ width: 36, height: 36, borderRadius: "50%", background: record.isGuest ? "#fb923c" : "var(--gradient-primary)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "14px", fontWeight: 800, color: "white", flexShrink: 0 }}>
-                      {record.isGuest ? "👥" : record.name?.[0]?.toUpperCase()}
-                    </div>
-                  )}
-
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontWeight: 700, fontSize: "0.88rem", color: record.isGuest ? "#fb923c" : "var(--card-foreground)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                      {record.name}
-                    </div>
-                    <div style={{ fontSize: "0.72rem", color: record.isGuest ? "#fb923c" : "var(--muted-foreground)", fontWeight: record.isGuest ? 600 : 400 }}>
-                      {record.isGuest ? record.guestNote : `Mã: ${record.code}`}
-                    </div>
-                  </div>
-                </div>
-
-                <div style={{ textAlign: "right", flexShrink: 0 }}>
-                  <div style={{ fontWeight: 800, fontSize: "0.9rem", color: "var(--card-foreground)" }}>
-                    {formatCurrency(record.amountRequired)}
-                  </div>
-                  <span style={{ display: "inline-block", marginTop: "3px", padding: "2px 8px", borderRadius: "999px", fontSize: "0.68rem", fontWeight: 700, color: st.color, background: st.bg }}>
-                    {st.label}
-                  </span>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
+      <PaymentSessionDetailView
+        displayItems={displayItems}
+        isAdmin={isAdmin}
+        RECORD_STATUS={RECORD_STATUS}
+      />
     </div>
   );
 }

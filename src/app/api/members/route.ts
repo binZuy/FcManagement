@@ -41,25 +41,32 @@ export async function POST(request: NextRequest) {
   const body = await request.json();
   const { name, email, phone, jerseyNumber, position, joinDate, note } = body;
 
-  if (!name || !email) {
+  const trimmedEmail = email && typeof email === "string" && email.trim() !== "" ? email.trim() : null;
+
+  if (!name || name.trim() === "") {
     return NextResponse.json(
-      { error: "Name and email are required" },
+      { error: "Tên thành viên là bắt buộc" },
       { status: 400 }
     );
   }
 
-  // Add email to whitelist if not already
-  await prisma.allowedEmail.upsert({
-    where: { email },
-    update: { label: name },
-    create: { email, label: name },
-  });
+  let user = null;
 
-  // Create or find user
-  let user = await prisma.user.findUnique({ where: { email } });
+  if (trimmedEmail) {
+    // Add email to whitelist if provided
+    await prisma.allowedEmail.upsert({
+      where: { email: trimmedEmail },
+      update: { label: name },
+      create: { email: trimmedEmail, label: name },
+    });
+
+    user = await prisma.user.findUnique({ where: { email: trimmedEmail } });
+  }
+
+  // Create or update user
   if (!user) {
     user = await prisma.user.create({
-      data: { name, email, phone, role: Role.MEMBER },
+      data: { name, email: trimmedEmail, phone, role: Role.MEMBER },
     });
   } else {
     await prisma.user.update({
@@ -74,7 +81,7 @@ export async function POST(request: NextRequest) {
   });
   if (existingMember) {
     return NextResponse.json(
-      { error: "Member already exists for this user" },
+      { error: "Thành viên đã tồn tại cho tài khoản này" },
       { status: 409 }
     );
   }

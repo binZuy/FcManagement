@@ -77,17 +77,16 @@ export default function NewMemberPage() {
           </div>
 
           <div>
-            <label className="form-label">Email (Dùng để đăng nhập) *</label>
+            <label className="form-label">Email (Dùng để đăng nhập - Tùy chọn)</label>
             <input
               type="email"
-              required
               className="form-input"
-              placeholder="VD: nva@gmail.com"
+              placeholder="VD: nva@gmail.com (Có thể để trống)"
               value={formData.email}
               onChange={(e) => setFormData({ ...formData, email: e.target.value })}
             />
             <p style={{ fontSize: "0.72rem", color: "var(--muted-foreground)", marginTop: "4px" }}>
-              Email này sẽ được tự động thêm vào danh sách cho phép (Whitelist).
+              Nếu điền Email, hệ thống sẽ tự động thêm vào danh sách cho phép đăng nhập (Whitelist).
             </p>
           </div>
 

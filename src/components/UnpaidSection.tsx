@@ -1,9 +1,11 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { QRPaymentDialog } from "@/components/QRPaymentDialog";
 import { MarkPaidButton } from "@/components/MarkPaidButton";
-import { AlertCircle, CheckSquare, Square } from "lucide-react";
+import { showToast } from "@/components/Toast";
+import { AlertCircle, CheckSquare, Square, CheckCircle, Loader2 } from "lucide-react";
 import { formatDate } from "@/lib/utils";
 
 interface UnpaidRecord {
@@ -36,8 +38,6 @@ function formatCurrency(amount: number): string {
   return new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" }).format(amount);
 }
 
-
-
 export function UnpaidSection({
   memberId,
   memberCode,
@@ -45,10 +45,14 @@ export function UnpaidSection({
   unpaidRecords,
   isAdmin,
 }: UnpaidSectionProps) {
+  const router = useRouter();
+
   // Mặc định tick chọn TẤT CẢ các khoản chưa đóng
   const [selectedIds, setSelectedIds] = useState<Set<string>>(
     new Set(unpaidRecords.map((r) => r.id))
   );
+  const [isBulkLoading, setIsBulkLoading] = useState(false);
+  const [isBulkConfirming, setIsBulkConfirming] = useState(false);
 
   const toggleSelect = (id: string) => {
     setSelectedIds((prev) => {
@@ -61,6 +65,41 @@ export function UnpaidSection({
 
   const selectAll = () => setSelectedIds(new Set(unpaidRecords.map((r) => r.id)));
   const clearAll = () => setSelectedIds(new Set());
+
+  const handleBulkMarkPaid = async () => {
+    if (selectedIds.size === 0) return;
+
+    if (!isBulkConfirming) {
+      setIsBulkConfirming(true);
+      setTimeout(() => setIsBulkConfirming(false), 3500);
+      return;
+    }
+
+    setIsBulkConfirming(false);
+    setIsBulkLoading(true);
+
+    try {
+      const recordIdsArray = Array.from(selectedIds);
+      const res = await fetch("/api/payments/records/bulk-paid", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ recordIds: recordIdsArray }),
+      });
+
+      if (!res.ok) {
+        const errJson = await res.json().catch(() => ({}));
+        throw new Error(errJson.error || "Lỗi khi cập nhật");
+      }
+
+      showToast.success(`Đã thu thành công ${recordIdsArray.length} khoản! 🎉`);
+      setSelectedIds(new Set());
+      router.refresh();
+    } catch (err: any) {
+      showToast.error("Lỗi khi thu tiền: " + (err.message || err));
+    } finally {
+      setIsBulkLoading(false);
+    }
+  };
 
   // Tính tổng tiền các khoản đã tick
   const selectedTotal = unpaidRecords
@@ -170,6 +209,40 @@ export function UnpaidSection({
             >
               Bỏ chọn
             </button>
+            {isAdmin && selectedIds.size > 0 && (
+              <button
+                type="button"
+                onClick={handleBulkMarkPaid}
+                disabled={isBulkLoading}
+                style={{
+                  padding: "4px 10px",
+                  borderRadius: "6px",
+                  background: isBulkConfirming
+                    ? "rgba(234, 179, 8, 0.9)"
+                    : "var(--primary)",
+                  color: isBulkConfirming ? "#000" : "white",
+                  border: "none",
+                  cursor: isBulkLoading ? "not-allowed" : "pointer",
+                  fontSize: "0.72rem",
+                  fontWeight: 800,
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "4px",
+                  transition: "all 0.15s ease",
+                }}
+              >
+                {isBulkLoading ? (
+                  <Loader2 size={13} className="animate-spin" />
+                ) : (
+                  <CheckCircle size={13} />
+                )}
+                {isBulkLoading
+                  ? "Đang xử lý..."
+                  : isBulkConfirming
+                  ? `Xác nhận thu ${selectedIds.size} khoản?`
+                  : `Thu tiền ${selectedIds.size} khoản đã chọn`}
+              </button>
+            )}
           </div>
 
           <div style={{ fontSize: "0.78rem", color: "var(--muted-foreground)", whiteSpace: "nowrap" }}>
