@@ -253,6 +253,7 @@ export default async function MemberPaymentDetailPage({ params }: Params) {
           amountRequired: r.amountRequired,
           amountPaid: r.amountPaid,
           status: r.status,
+          note: r.note,
           session: {
             title: r.session.title,
             code: r.session.code,

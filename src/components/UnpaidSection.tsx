@@ -274,6 +274,9 @@ export function UnpaidSection({
           const outstanding = r.amountRequired - r.amountPaid;
           const isSelected = selectedIds.has(r.id);
 
+          const cleanTitle = r.session.title.replace(/^Tiền sân:\s*/i, "").replace(/^Tiền sân\s*-\s*/i, "");
+          const isOnlyGuestDebt = r.amountPaid > 0 && !!r.note;
+
           return (
             <div
               key={r.id}
@@ -318,13 +321,18 @@ export function UnpaidSection({
                   style={{
                     fontSize: "0.85rem",
                     fontWeight: 700,
-                    color: (r.note?.startsWith("Bạn") || r.note?.startsWith("Khách")) ? "#fb923c" : "var(--card-foreground)",
+                    color: isOnlyGuestDebt ? "#fb923c" : "var(--card-foreground)",
                     overflow: "hidden",
                     textOverflow: "ellipsis",
                     whiteSpace: "nowrap",
                   }}
                 >
-                  {r.session.title}{r.note ? <span style={{ color: "#fb923c", fontWeight: 600 }}> ({r.note.replace("Khách đi cùng", "Bạn").replace("Bạn đi cùng", "Bạn").replace("+", "")})</span> : ""}
+                  {cleanTitle}
+                  {isOnlyGuestDebt ? (
+                    <span style={{ color: "#fb923c", fontWeight: 700 }}> - Bạn</span>
+                  ) : r.note ? (
+                    <span style={{ color: "#fb923c", fontWeight: 600 }}> ({r.note.replace("Khách đi cùng", "Bạn").replace("Bạn đi cùng", "Bạn").replace("+", "")})</span>
+                  ) : null}
                 </div>
                 {/* Chỉ hiển thị hạn nộp nếu có — bỏ status & yêu cầu vì thừa */}
                 {r.session.dueDate && (
