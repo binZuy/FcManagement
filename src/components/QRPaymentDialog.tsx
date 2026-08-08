@@ -317,9 +317,9 @@ const BANK_APP_MAP: Record<string, string> = {
     if (!BANK_BIN || !ACCOUNT_NO) return;
     const encodedContent = encodeURIComponent(qrContent);
     const encodedName = encodeURIComponent(process.env.NEXT_PUBLIC_ACCOUNT_NAME || "FC Management");
-    const appCode = BANK_APP_MAP[BANK_BIN] || "mb";
-    // Cú pháp chuẩn VietQR Deeplink: https://dl.vietqr.io/pay?app=<APP>&ba=<ACCOUNT>@<BIN>&am=<AMOUNT>&tn=<NOTE>&bn=<NAME>
-    const url = `https://dl.vietqr.io/pay?app=${appCode}&ba=${ACCOUNT_NO}@${BANK_BIN}&am=${totalAmount}&tn=${encodedContent}&bn=${encodedName}`;
+    // Cú pháp VietQR Deeplink linh hoạt (bỏ app= để VietQR tự hiển thị trang chọn app ngân hàng của người dùng trên mobile):
+    // https://dl.vietqr.io/pay?ba=<ACCOUNT>@<BIN>&am=<AMOUNT>&tn=<NOTE>&bn=<NAME>
+    const url = `https://dl.vietqr.io/pay?ba=${ACCOUNT_NO}@${BANK_BIN}&am=${totalAmount}&tn=${encodedContent}&bn=${encodedName}`;
     window.open(url, "_blank", "noopener,noreferrer");
   };
 

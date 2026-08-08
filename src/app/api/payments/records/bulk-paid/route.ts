@@ -23,6 +23,11 @@ export async function POST(req: NextRequest) {
 
     const records = await prisma.paymentRecord.findMany({
       where: { id: { in: realIds } },
+      include: {
+        session: {
+          include: { match: { include: { attendances: true } } }
+        }
+      }
     });
 
     if (records.length === 0) {
@@ -30,17 +35,41 @@ export async function POST(req: NextRequest) {
     }
 
     await Promise.all(
-      records.map((r) =>
-        prisma.paymentRecord.update({
+      records.map((r) => {
+        const hasSelf = recordIds.includes(r.id + "_self");
+        const hasGuest = recordIds.includes(r.id + "_guest");
+        const hasPlain = recordIds.includes(r.id);
+
+        let targetAmountPaid = r.amountRequired;
+        let targetStatus: RecordStatus = RecordStatus.PAID;
+
+        // Nếu chỉ tick thu phần Thành viên (_self) mà không tick phần Bạn (_guest) và không tick bản ghi gốc
+        if (hasSelf && !hasGuest && !hasPlain) {
+          const att = r.session.match?.attendances.find((a) => a.memberId === r.memberId);
+          if (att && (att.guestCount > 0 || att.drinksGuestCount > 0)) {
+            const totalHeads = 1 + att.guestCount;
+            const drinkHeads = (att.isDrinks ? 1 : 0) + att.drinksGuestCount;
+            const baseFeePerHead = (att.feeAssigned ?? 0) / (totalHeads || 1);
+            const drinksFeePerHead = drinkHeads > 0 ? (att.drinksFeeAssigned ?? 0) / (drinkHeads || 1) : 0;
+            const memberSelfFee = Math.round(baseFeePerHead + (att.isDrinks ? drinksFeePerHead : 0));
+
+            targetAmountPaid = Math.min(r.amountRequired, memberSelfFee);
+            if (targetAmountPaid < r.amountRequired) {
+              targetStatus = RecordStatus.PENDING;
+            }
+          }
+        }
+
+        return prisma.paymentRecord.update({
           where: { id: r.id },
           data: {
-            status: RecordStatus.PAID,
-            amountPaid: r.amountRequired,
+            status: targetStatus,
+            amountPaid: targetAmountPaid,
             paymentMethod: PayMethod.CASH,
             paidAt: new Date(),
           },
-        })
-      )
+        });
+      })
     );
 
     return NextResponse.json({

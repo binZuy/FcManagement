@@ -76,6 +76,9 @@ export default async function PaymentDetailPage({ params }: Params) {
       const memberSelfFee = Math.round(baseFeePerHead + (att?.isDrinks ? drinksFeePerHead : 0));
       const guestTotalFee = Math.round(guestCount * baseFeePerHead + drinksGuestCount * drinksFeePerHead);
 
+      const selfPaid = record.status === "PAID" ? memberSelfFee : Math.min(memberSelfFee, record.amountPaid);
+      const guestPaid = record.status === "PAID" ? guestTotalFee : Math.max(0, record.amountPaid - memberSelfFee);
+
       // Dòng 1: Bản thân thành viên
       displayItems.push({
         id: record.id + "_self",
@@ -85,8 +88,8 @@ export default async function PaymentDetailPage({ params }: Params) {
         code: record.member.code,
         image: record.member.user.image,
         amountRequired: memberSelfFee,
-        amountPaid: record.status === "PAID" ? memberSelfFee : 0,
-        status: memberSelfFee === 0 ? "WAIVED" : record.status,
+        amountPaid: selfPaid,
+        status: memberSelfFee === 0 ? "WAIVED" : selfPaid >= memberSelfFee ? "PAID" : "PENDING",
         paidAt: record.paidAt,
         paymentMethod: record.paymentMethod,
         sepayTx: record.sepayTx,
@@ -102,8 +105,8 @@ export default async function PaymentDetailPage({ params }: Params) {
           code: record.member.code,
           image: null,
           amountRequired: guestTotalFee,
-          amountPaid: record.status === "PAID" ? guestTotalFee : 0,
-          status: record.status,
+          amountPaid: guestPaid,
+          status: guestPaid >= guestTotalFee ? "PAID" : "PENDING",
           paidAt: record.paidAt,
           paymentMethod: record.paymentMethod,
           sepayTx: record.sepayTx,

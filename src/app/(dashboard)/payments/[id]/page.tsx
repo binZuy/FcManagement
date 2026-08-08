@@ -39,18 +39,18 @@ export default async function MemberPaymentDetailPage({ params }: Params) {
 
   if (!member) notFound();
 
-  // Tách biệt record chưa đóng và đã đóng
+  // Tách biệt record chưa đóng (bao gồm cả đóng 1 phần) và đã đóng xong
   const unpaidRecords = member.paymentRecords.filter(
-    (r) => r.status !== RecordStatus.PAID && r.status !== RecordStatus.WAIVED
+    (r) => r.status !== RecordStatus.WAIVED && (r.amountRequired - r.amountPaid) > 0
   );
   const paidRecords = member.paymentRecords
     .filter(
-      (r) => r.status === RecordStatus.PAID || r.status === RecordStatus.WAIVED
+      (r) => r.status === RecordStatus.WAIVED || (r.amountRequired - r.amountPaid) <= 0
     )
     .slice(0, 20);
 
   const totalPaidCount = member.paymentRecords.filter(
-    (r) => r.status === RecordStatus.PAID
+    (r) => (r.amountRequired - r.amountPaid) <= 0
   ).length;
   const totalPaidAmount = member.paymentRecords
     .filter((r) => r.status === RecordStatus.PAID)
