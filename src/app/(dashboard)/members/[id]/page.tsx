@@ -32,7 +32,7 @@ export default async function MemberDetailPage({ params }: Params) {
   const member = await prisma.member.findUnique({
     where: { id },
     include: {
-      user: { select: { id: true, name: true, email: true, image: true, phone: true } },
+      user: { select: { id: true, name: true, email: true, image: true, phone: true, role: true } },
       attendances: {
         select: {
           id: true,
@@ -101,6 +101,8 @@ export default async function MemberDetailPage({ params }: Params) {
             initialJerseyNumber={member.jerseyNumber}
             initialPosition={member.position}
             initialNote={member.note}
+            initialRole={member.user.role}
+            isAdmin={isAdmin}
           />
         )}
       </div>

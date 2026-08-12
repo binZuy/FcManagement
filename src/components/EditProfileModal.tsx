@@ -10,6 +10,8 @@ interface EditProfileModalProps {
   initialJerseyNumber: number | null;
   initialPosition: string | null;
   initialNote: string | null;
+  initialRole?: string;
+  isAdmin?: boolean;
 }
 
 const POSITIONS = [
@@ -26,6 +28,8 @@ export function EditProfileModal({
   initialJerseyNumber,
   initialPosition,
   initialNote,
+  initialRole = "MEMBER",
+  isAdmin = false,
 }: EditProfileModalProps) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -36,6 +40,7 @@ export function EditProfileModal({
   const [jerseyNumber, setJerseyNumber] = useState<string>(initialJerseyNumber ? String(initialJerseyNumber) : "");
   const [position, setPosition] = useState(initialPosition || "");
   const [note, setNote] = useState(initialNote || "");
+  const [role, setRole] = useState(initialRole);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -43,16 +48,22 @@ export function EditProfileModal({
     setError(null);
 
     try {
+      const payload: any = {
+        name,
+        phone,
+        jerseyNumber: jerseyNumber ? parseInt(jerseyNumber, 10) : null,
+        position: position || null,
+        note,
+      };
+
+      if (isAdmin) {
+        payload.role = role;
+      }
+
       const res = await fetch(`/api/members/${memberId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name,
-          phone,
-          jerseyNumber: jerseyNumber ? parseInt(jerseyNumber, 10) : null,
-          position: position || null,
-          note,
-        }),
+        body: JSON.stringify(payload),
       });
 
       const data = await res.json();
@@ -207,6 +218,23 @@ export function EditProfileModal({
                   </select>
                 </div>
               </div>
+
+              {isAdmin && (
+                <div>
+                  <label className="form-label" style={{ color: "#facc15", fontWeight: 700 }}>
+                    👑 Quyền hạn (Role)
+                  </label>
+                  <select
+                    value={role}
+                    onChange={(e) => setRole(e.target.value)}
+                    className="form-input"
+                    style={{ background: "#1e293b", border: "1px solid rgba(250,204,21,0.4)" }}
+                  >
+                    <option value="MEMBER">Thành viên (MEMBER)</option>
+                    <option value="ADMIN">Quản trị viên (ADMIN)</option>
+                  </select>
+                </div>
+              )}
 
               <div>
                 <label className="form-label">Ghi chú / Khẩu hiệu cá nhân (Bio)</label>

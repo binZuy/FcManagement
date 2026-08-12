@@ -26,13 +26,16 @@ export async function PATCH(
 
 
     const body = await req.json();
-    const { name, phone, jerseyNumber, position, note } = body as {
+    const { name, phone, jerseyNumber, position, note, role } = body as {
       name?: string;
       phone?: string;
       jerseyNumber?: number | null;
       position?: Position | null;
       note?: string | null;
+      role?: Role;
     };
+
+    const isAdmin = session.user.role === Role.ADMIN;
 
     // Cập nhật User & Member
     await prisma.member.update({
@@ -45,6 +48,7 @@ export async function PATCH(
           update: {
             name: name !== undefined ? name : undefined,
             phone: phone !== undefined ? phone : undefined,
+            ...(isAdmin && role !== undefined ? { role } : {}),
           },
         },
       },
