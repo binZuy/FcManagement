@@ -135,13 +135,11 @@ export function MembersList({ initialMembers, isAdmin }: MembersListProps) {
               <th>Vị trí</th>
               <th>Ngày gia nhập</th>
               <th>Trận đã đá</th>
-              <th>Trạng thái</th>
               <th></th>
             </tr>
           </thead>
           <tbody>
             {filteredMembers.map((member) => {
-              const st = STATUS_LABELS[member.status] ?? STATUS_LABELS.INACTIVE;
               return (
                 <tr key={member.id} className="animate-fade-in">
                   <td>
@@ -192,21 +190,6 @@ export function MembersList({ initialMembers, isAdmin }: MembersListProps) {
                   </td>
                   <td style={{ color: "var(--card-foreground)", fontSize: "0.85rem" }}>
                     {member._count.attendances}
-                  </td>
-                  <td>
-                    <span
-                      style={{
-                        padding: "4px 10px",
-                        borderRadius: "999px",
-                        fontSize: "0.75rem",
-                        fontWeight: 600,
-                        color: st.color,
-                        background: st.bg,
-                        display: "inline-block",
-                      }}
-                    >
-                      {st.label}
-                    </span>
                   </td>
                   <td>
                     <Link
@@ -306,18 +289,6 @@ export function MembersList({ initialMembers, isAdmin }: MembersListProps) {
                 </div>
 
                 <div style={{ display: "flex", alignItems: "center", gap: "8px", flexShrink: 0 }}>
-                  <span
-                    style={{
-                      padding: "2px 8px",
-                      borderRadius: "999px",
-                      fontSize: "0.68rem",
-                      fontWeight: 600,
-                      color: st.color,
-                      background: st.bg,
-                    }}
-                  >
-                    {st.label}
-                  </span>
                   <ChevronRight size={18} style={{ color: "var(--muted-foreground)", opacity: 0.6 }} />
                 </div>
               </div>

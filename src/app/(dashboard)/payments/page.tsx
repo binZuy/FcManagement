@@ -108,45 +108,7 @@ export default async function PaymentsPage() {
         </div>
       )}
 
-      {/* Hướng dẫn nộp tiền ngắn gọn */}
-      <div
-        style={{
-          padding: "16px 20px",
-          borderRadius: "14px",
-          background: "linear-gradient(135deg, rgba(34,197,94,0.08), rgba(15,23,42,0.6))",
-          border: "1px solid rgba(34,197,94,0.25)",
-          display: "flex",
-          flexDirection: "column",
-          gap: "10px",
-        }}
-      >
-        <div style={{ display: "flex", alignItems: "center", gap: "8px", fontWeight: 800, color: "#4ade80", fontSize: "0.9rem" }}>
-          <span>💡 HƯỚNG DẪN NỘP TIỀN NHANH CHÓNG CHO THÀNH VIÊN</span>
-        </div>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "12px", fontSize: "0.82rem", color: "var(--card-foreground)" }}>
-          <div style={{ display: "flex", alignItems: "flex-start", gap: "8px" }}>
-            <span style={{ width: 22, height: 22, borderRadius: "50%", background: "rgba(34,197,94,0.2)", color: "#22c55e", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, flexShrink: 0, fontSize: "0.75rem" }}>1</span>
-            <div>
-              <strong>Bước 1: Tìm tên mình</strong>
-              <div style={{ color: "var(--muted-foreground)", fontSize: "0.78rem" }}>Bấm chọn tên bạn trong danh sách bên dưới để xem chi tiết khoản nợ.</div>
-            </div>
-          </div>
-          <div style={{ display: "flex", alignItems: "flex-start", gap: "8px" }}>
-            <span style={{ width: 22, height: 22, borderRadius: "50%", background: "rgba(34,197,94,0.2)", color: "#22c55e", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, flexShrink: 0, fontSize: "0.75rem" }}>2</span>
-            <div>
-              <strong>Bước 2: Tạo mã VietQR</strong>
-              <div style={{ color: "var(--muted-foreground)", fontSize: "0.78rem" }}>Tick chọn các trận cần đóng và bấm <strong>"Tạo QR Chuyển khoản"</strong>.</div>
-            </div>
-          </div>
-          <div style={{ display: "flex", alignItems: "flex-start", gap: "8px" }}>
-            <span style={{ width: 22, height: 22, borderRadius: "50%", background: "rgba(34,197,94,0.2)", color: "#22c55e", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, flexShrink: 0, fontSize: "0.75rem" }}>3</span>
-            <div>
-              <strong>Bước 3: Quét QR thanh toán</strong>
-              <div style={{ color: "var(--muted-foreground)", fontSize: "0.78rem" }}>Mở App ngân hàng quét mã QR. Hệ thống tự động gạch nợ ngay khi nhận tiền!</div>
-            </div>
-          </div>
-        </div>
-      </div>
+
 
       {/* Members List (Chỉ hiển thị thành viên nợ tiền) */}
       <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>

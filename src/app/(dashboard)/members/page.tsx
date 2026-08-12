@@ -30,7 +30,7 @@ export default async function MembersPage() {
             Thành viên
           </h1>
           <p style={{ color: "var(--muted-foreground)", fontSize: "0.9rem" }}>
-            {members.filter((m) => m.status === "ACTIVE").length} thành viên đang hoạt động
+            {members.length} thành viên
           </p>
         </div>
         {isAdmin && (
