@@ -2,7 +2,8 @@ import NextAuth from "next-auth";
 import Google from "next-auth/providers/google";
 import { PrismaAdapter } from "@auth/prisma-adapter";
 import { prisma } from "@/lib/prisma";
-import type { Role } from "@prisma/client";
+import { Role } from "@prisma/client";
+import { generateMemberCode } from "@/lib/utils";
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
   adapter: PrismaAdapter(prisma),
@@ -15,44 +16,34 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
   callbacks: {
     async signIn({ user }) {
       if (!user.email) return false;
-
-      // 1. Nếu là ADMIN_EMAIL thì luôn luôn được phép đăng nhập (không cần seed trước)
-      if (process.env.ADMIN_EMAIL && user.email === process.env.ADMIN_EMAIL) {
-        return true;
-      }
-
-      // 2. Kiểm tra email trong whitelist đối với các thành viên khác
-      const allowed = await prisma.allowedEmail.findUnique({
-        where: { email: user.email },
-      });
-
-      if (!allowed) {
-        return "/unauthorized";
-      }
-
+      // Mở hết quyền đăng nhập cho mọi email
       return true;
     },
     async session({ session, user }) {
       if (session.user) {
-        // 2. Nếu email đăng nhập khớp với ADMIN_EMAIL, tự động nâng quyền lên ADMIN trong DB
-        const isAdminEmail = user.email === process.env.ADMIN_EMAIL;
-        
         let dbUser = await prisma.user.findUnique({
           where: { id: user.id },
           include: { member: true },
         });
 
-        if (dbUser && isAdminEmail && dbUser.role !== "ADMIN") {
-          dbUser = await prisma.user.update({
-            where: { id: user.id },
-            data: { role: "ADMIN" },
-            include: { member: true },
-          });
-        }
-
         if (dbUser) {
+          // Tự động tạo hồ sơ Member nếu chưa có
+          if (!dbUser.member) {
+            let code = generateMemberCode(dbUser.name ?? "FC");
+            if (!code) code = "FC";
+            const existingCode = await prisma.member.findUnique({ where: { code } });
+            if (existingCode) code = code + Math.floor(Math.random() * 99);
+            await prisma.member.create({
+              data: {
+                userId: dbUser.id,
+                code,
+                status: "ACTIVE",
+              },
+            });
+          }
+
           session.user.id = dbUser.id;
-          session.user.role = dbUser.role as Role;
+          session.user.role = Role.MEMBER;
         }
       }
       return session;

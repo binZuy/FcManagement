@@ -243,6 +243,46 @@ export default async function MemberPaymentDetailPage({ params }: Params) {
         </div>
       </div>
 
+      {/* Hướng dẫn nộp tiền ngắn gọn */}
+      <div
+        style={{
+          padding: "16px 20px",
+          borderRadius: "14px",
+          background: "linear-gradient(135deg, rgba(34,197,94,0.08), rgba(15,23,42,0.6))",
+          border: "1px solid rgba(34,197,94,0.25)",
+          display: "flex",
+          flexDirection: "column",
+          gap: "10px",
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: "8px", fontWeight: 800, color: "#4ade80", fontSize: "0.9rem" }}>
+          <span>💡 HƯỚNG DẪN NỘP TIỀN NHANH CHÓNG</span>
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "12px", fontSize: "0.82rem", color: "var(--card-foreground)" }}>
+          <div style={{ display: "flex", alignItems: "flex-start", gap: "8px" }}>
+            <span style={{ width: 22, height: 22, borderRadius: "50%", background: "rgba(34,197,94,0.2)", color: "#22c55e", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, flexShrink: 0, fontSize: "0.75rem" }}>1</span>
+            <div>
+              <strong>Bước 1: Chọn khoản tiền</strong>
+              <div style={{ color: "var(--muted-foreground)", fontSize: "0.78rem" }}>Tick chọn các trận cần đóng ở danh sách bên dưới (hoặc bấm <i>Chọn tất cả</i>).</div>
+            </div>
+          </div>
+          <div style={{ display: "flex", alignItems: "flex-start", gap: "8px" }}>
+            <span style={{ width: 22, height: 22, borderRadius: "50%", background: "rgba(34,197,94,0.2)", color: "#22c55e", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, flexShrink: 0, fontSize: "0.75rem" }}>2</span>
+            <div>
+              <strong>Bước 2: Tạo mã VietQR</strong>
+              <div style={{ color: "var(--muted-foreground)", fontSize: "0.78rem" }}>Bấm nút <strong>"Tạo QR Chuyển khoản"</strong> để hiển thị mã quét có sẵn số tiền và cú pháp.</div>
+            </div>
+          </div>
+          <div style={{ display: "flex", alignItems: "flex-start", gap: "8px" }}>
+            <span style={{ width: 22, height: 22, borderRadius: "50%", background: "rgba(34,197,94,0.2)", color: "#22c55e", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, flexShrink: 0, fontSize: "0.75rem" }}>3</span>
+            <div>
+              <strong>Bước 3: Quét mã & Chuyển khoản</strong>
+              <div style={{ color: "var(--muted-foreground)", fontSize: "0.78rem" }}>Dùng App ngân hàng quét mã QR. Hệ thống tự động nhận tiền và gạch nợ ngay lập tức!</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* UnpaidSection Component với QR Dialog — Full Width */}
       <UnpaidSection
         memberId={member.id}

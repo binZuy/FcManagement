@@ -55,10 +55,6 @@ async function getDashboardData() {
           },
         },
       },
-      orderBy: {
-        attendances: { _count: "desc" },
-      },
-      take: 3,
     }),
     prisma.paymentSession.findMany({
       where: { status: "OPEN" },
@@ -69,6 +65,11 @@ async function getDashboardData() {
       },
     }),
   ]);
+
+  // Sort top members by attended count descending
+  const sortedTopMembers = [...topMembers]
+    .sort((a, b) => b._count.attendances - a._count.attendances)
+    .slice(0, 3);
 
   // Win rate calculation
   const wins = matchesWithResult.filter((m) => m.result === "WIN").length;
@@ -88,7 +89,7 @@ async function getDashboardData() {
     totalPlayedWithResult,
     avgMatchesPerMonth,
     upcomingMatch,
-    topMembers,
+    topMembers: sortedTopMembers,
     openPaymentSessions,
   };
 }

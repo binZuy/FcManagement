@@ -24,15 +24,6 @@ export async function PATCH(
       return NextResponse.json({ error: "Thành viên không tồn tại" }, { status: 404 });
     }
 
-    const isAdmin = session.user.role === Role.ADMIN;
-    const isOwner = session.user.id === member.userId;
-
-    if (!isAdmin && !isOwner) {
-      return NextResponse.json(
-        { error: "Bạn chỉ có thể chỉnh sửa profile của chính mình" },
-        { status: 403 }
-      );
-    }
 
     const body = await req.json();
     const { name, phone, jerseyNumber, position, note } = body as {

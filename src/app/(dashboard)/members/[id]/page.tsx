@@ -20,25 +20,6 @@ const ATTEND_LABELS: Record<string, { label: string; color: string }> = {
   EXCUSED: { label: "Xin phép", color: "#a5b4fc" },
 };
 
-// Hàm che Email: chỉ giữ chữ đầu và chữ cuối trước @
-function maskEmail(email: string | null): string {
-  if (!email) return "—";
-  const [name, domain] = email.split("@");
-  if (!domain || name.length <= 1) return "***";
-  const first = name[0];
-  const last = name[name.length - 1];
-  return `${first}***${last}@${domain}`;
-}
-
-// Hàm che SĐT: chỉ giữ số đầu và số cuối
-function maskPhone(phone: string | null): string {
-  if (!phone) return "—";
-  if (phone.length <= 2) return "***";
-  const first = phone[0];
-  const last = phone[phone.length - 1];
-  return `${first}***${last}`;
-}
-
 type Params = { params: Promise<{ id: string }> };
 
 export default async function MemberDetailPage({ params }: Params) {
@@ -69,8 +50,7 @@ export default async function MemberDetailPage({ params }: Params) {
 
   if (!member) notFound();
 
-  const isOwner = session?.user?.id === member.userId;
-  const canEdit = isAdmin || isOwner;
+  const canEdit = isAuthenticated;
 
   // Đếm số trận chưa đóng
   const unpaidCount = member.paymentRecords.filter((r) =>
@@ -206,30 +186,20 @@ export default async function MemberDetailPage({ params }: Params) {
               )}
             </div>
 
-            {/* Email & SĐT (Đã che chỉ giữ chữ đầu và chữ cuối nếu chưa đăng nhập) */}
+            {/* Email & SĐT */}
             <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
               <div style={{ display: "flex", alignItems: "center", gap: "8px", color: "var(--muted-foreground)", fontSize: "0.82rem" }}>
                 <Mail size={14} style={{ flexShrink: 0 }} />
-                <span>
-                  {isAuthenticated ? (member.user.email ?? "—") : maskEmail(member.user.email)}
-                </span>
+                <span>{member.user.email ?? "—"}</span>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: "8px", color: "var(--muted-foreground)", fontSize: "0.82rem" }}>
                 <Phone size={14} style={{ flexShrink: 0 }} />
-                <span>
-                  {isAuthenticated ? (member.user.phone ?? "Chưa cập nhật") : maskPhone(member.user.phone)}
-                </span>
+                <span>{member.user.phone ?? "Chưa cập nhật"}</span>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: "8px", color: "var(--muted-foreground)", fontSize: "0.82rem" }}>
                 <Calendar size={14} style={{ flexShrink: 0 }} />
                 <span>Gia nhập: {formatDate(member.joinDate)}</span>
               </div>
-
-              {!isAuthenticated && (
-                <div style={{ fontSize: "0.72rem", color: "#facc15", marginTop: "2px" }}>
-                  🔒 Bạn đang xem ở chế độ Khách. Đăng nhập để xem đầy đủ SĐT & Email.
-                </div>
-              )}
             </div>
           </div>
         </div>
