@@ -7,6 +7,11 @@ const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 export const metadata: Metadata = {
   title: "FC Manager — Quản lý Đội Bóng",
   description: "Hệ thống quản lý đội bóng: thành viên, lịch thi đấu, thu tiền tự động qua SePay",
+  icons: {
+    icon: "/football.png",
+    shortcut: "/football.png",
+    apple: "/football.png",
+  },
 };
 
 export default function RootLayout({
