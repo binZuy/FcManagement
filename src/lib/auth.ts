@@ -2,8 +2,6 @@ import NextAuth from "next-auth";
 import Google from "next-auth/providers/google";
 import { PrismaAdapter } from "@auth/prisma-adapter";
 import { prisma } from "@/lib/prisma";
-import { Role } from "@prisma/client";
-import { generateMemberCode } from "@/lib/utils";
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
   adapter: PrismaAdapter(prisma),
@@ -30,34 +28,17 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         if (userId) {
           dbUser = await prisma.user.findUnique({
             where: { id: userId },
-            include: { member: true },
           });
         }
         if (!dbUser && userEmail) {
           dbUser = await prisma.user.findUnique({
             where: { email: userEmail },
-            include: { member: true },
           });
         }
 
         if (dbUser) {
-          // Tự động tạo hồ sơ Member nếu chưa có
-          if (!dbUser.member) {
-            let code = generateMemberCode(dbUser.name ?? "FC");
-            if (!code) code = "FC";
-            const existingCode = await prisma.member.findUnique({ where: { code } });
-            if (existingCode) code = code + Math.floor(Math.random() * 99);
-            await prisma.member.create({
-              data: {
-                userId: dbUser.id,
-                code,
-                status: "ACTIVE",
-              },
-            });
-          }
-
           session.user.id = dbUser.id;
-          session.user.role = dbUser.role; // Gán đúng role ADMIN / MEMBER từ DB
+          session.user.role = dbUser.role; // Gán đúng role ADMIN / MEMBER từ DB (mặc định là MEMBER)
         }
       }
       return session;
