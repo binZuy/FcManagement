@@ -165,16 +165,6 @@ export default function LoginPage() {
           </Link>
         </div>
 
-        <p
-          style={{
-            marginTop: "20px",
-            fontSize: "0.75rem",
-            color: "var(--muted-foreground)",
-            lineHeight: 1.5,
-          }}
-        >
-          Chỉ các email được Admin cấp quyền mới có thể đăng nhập
-        </p>
       </div>
     </div>
   );
