@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { Edit3, Trash2, X, Save, AlertTriangle, Loader2 } from "lucide-react";
 import { showToast } from "@/components/Toast";
@@ -20,11 +21,16 @@ interface MatchAdminActionsProps {
 
 export function MatchAdminActions({ match }: MatchAdminActionsProps) {
   const router = useRouter();
+  const [mounted, setMounted] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
 
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const [formData, setFormData] = useState({
     title: match.title ?? "",
@@ -130,18 +136,21 @@ export function MatchAdminActions({ match }: MatchAdminActionsProps) {
       </div>
 
       {/* MODAL EDIT MATCH INFO */}
-      {showEditModal && (
+      {showEditModal && mounted && createPortal(
         <div
           style={{
             position: "fixed",
             inset: 0,
-            background: "rgba(0, 0, 0, 0.75)",
-            backdropFilter: "blur(6px)",
+            background: "rgba(0, 0, 0, 0.8)",
+            backdropFilter: "blur(8px)",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            zIndex: 100,
+            zIndex: 99999,
             padding: "16px",
+          }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget && !saving) setShowEditModal(false);
           }}
         >
           <div
@@ -153,7 +162,7 @@ export function MatchAdminActions({ match }: MatchAdminActionsProps) {
               borderRadius: "16px",
               background: "#0f172a",
               border: "1px solid var(--border)",
-              boxShadow: "0 20px 40px rgba(0, 0, 0, 0.5)",
+              boxShadow: "0 25px 50px rgba(0, 0, 0, 0.7)",
             }}
           >
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "18px" }}>
@@ -161,6 +170,7 @@ export function MatchAdminActions({ match }: MatchAdminActionsProps) {
                 Sửa thông tin trận đấu
               </h2>
               <button
+                type="button"
                 onClick={() => setShowEditModal(false)}
                 style={{ background: "none", border: "none", color: "var(--muted-foreground)", cursor: "pointer" }}
               >
@@ -268,22 +278,26 @@ export function MatchAdminActions({ match }: MatchAdminActionsProps) {
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* MODAL CONFIRM DELETE MATCH */}
-      {showDeleteModal && (
+      {showDeleteModal && mounted && createPortal(
         <div
           style={{
             position: "fixed",
             inset: 0,
-            background: "rgba(0, 0, 0, 0.75)",
-            backdropFilter: "blur(6px)",
+            background: "rgba(0, 0, 0, 0.8)",
+            backdropFilter: "blur(8px)",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            zIndex: 100,
+            zIndex: 99999,
             padding: "16px",
+          }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget && !deleting) setShowDeleteModal(false);
           }}
         >
           <div
@@ -295,7 +309,7 @@ export function MatchAdminActions({ match }: MatchAdminActionsProps) {
               borderRadius: "16px",
               background: "#0f172a",
               border: "1px solid rgba(239, 68, 68, 0.3)",
-              boxShadow: "0 20px 40px rgba(0, 0, 0, 0.6)",
+              boxShadow: "0 25px 50px rgba(0, 0, 0, 0.7)",
             }}
           >
             <div style={{ display: "flex", alignItems: "center", gap: "12px", color: "#f87171", marginBottom: "14px" }}>
@@ -351,7 +365,8 @@ export function MatchAdminActions({ match }: MatchAdminActionsProps) {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </>
   );
