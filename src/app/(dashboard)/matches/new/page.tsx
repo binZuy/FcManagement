@@ -35,8 +35,14 @@ export default function NewMatchPage() {
         }),
       });
 
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error || "Không thể tạo trận đấu");
+      let json: any = {};
+      try {
+        json = await res.json();
+      } catch {
+        throw new Error(`Lỗi máy chủ (${res.status} ${res.statusText || "Server Error"})`);
+      }
+
+      if (!res.ok) throw new Error(json?.error || "Không thể tạo trận đấu");
 
       router.push(`/matches/${json.data.id}`);
       router.refresh();
