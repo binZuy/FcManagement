@@ -5,6 +5,7 @@ import {
   AttendStatus,
   MatchResult,
   MatchStatus,
+  MatchType,
   Role,
   TeamSide,
   RecordStatus,
@@ -99,7 +100,23 @@ async function handleUpdateMatch(request: NextRequest, { params }: Params) {
 
   const { id } = await params;
   const body = await request.json();
-  const { result, status, title, location, note, feeWinner, feeLose, feeDraw, feeDefault, feeTotal, drinksFeeTotal, feeSplitMethod } = body;
+  const {
+    result,
+    status,
+    title,
+    location,
+    note,
+    matchDate,
+    matchType,
+    opponentName,
+    feeWinner,
+    feeLose,
+    feeDraw,
+    feeDefault,
+    feeTotal,
+    drinksFeeTotal,
+    feeSplitMethod
+  } = body;
 
   const match = await prisma.matchSession.findUnique({
     where: { id },
@@ -110,26 +127,47 @@ async function handleUpdateMatch(request: NextRequest, { params }: Params) {
   let finalStatus: MatchStatus = match.status;
   if (status) finalStatus = status as MatchStatus;
 
+  const updateData: any = {
+    title: title !== undefined ? title : undefined,
+    location: location !== undefined ? location : undefined,
+    note: note !== undefined ? note : undefined,
+    status: finalStatus,
+    result: (result === "" ? null : result) as MatchResult | null | undefined,
+    feeTotal: feeTotal != null ? parseFloat(feeTotal) : undefined,
+    feeWinner: feeWinner != null ? parseFloat(feeWinner) : undefined,
+    feeLose: feeLose != null ? parseFloat(feeLose) : undefined,
+    feeDraw: feeDraw != null ? parseFloat(feeDraw) : undefined,
+    feeDefault: feeDefault != null ? parseFloat(feeDefault) : undefined,
+    drinksFeeTotal: drinksFeeTotal != null ? parseFloat(drinksFeeTotal) : undefined,
+    feeSplitMethod: feeSplitMethod ?? undefined,
+  };
+
+  if (matchDate) {
+    updateData.matchDate = new Date(matchDate);
+  }
+  if (matchType) {
+    updateData.matchType = matchType as MatchType;
+    if (matchType === "INTERNAL") {
+      updateData.opponentName = null;
+    } else if (opponentName !== undefined) {
+      updateData.opponentName = opponentName;
+    }
+  } else if (opponentName !== undefined) {
+    updateData.opponentName = opponentName;
+  }
+
   const updated = await prisma.matchSession.update({
     where: { id },
-    data: {
-      title, location, note,
-      status: finalStatus,
-      result: (result === "" ? null : result) as MatchResult | null | undefined,
-      feeTotal: feeTotal != null ? parseFloat(feeTotal) : undefined,
-      feeWinner: feeWinner != null ? parseFloat(feeWinner) : undefined,
-      feeLose: feeLose != null ? parseFloat(feeLose) : undefined,
-      feeDraw: feeDraw != null ? parseFloat(feeDraw) : undefined,
-      feeDefault: feeDefault != null ? parseFloat(feeDefault) : undefined,
-      drinksFeeTotal: drinksFeeTotal != null ? parseFloat(drinksFeeTotal) : undefined,
-      feeSplitMethod: feeSplitMethod ?? undefined,
-    },
+    data: updateData,
   });
+
+  const currentType = updated.matchType;
+  const currentResult = updated.result;
 
   const getSide = (a: { teamSide?: TeamSide | null }) => a.teamSide ?? TeamSide.TEAM_A;
   const active = match.attendances.filter(a => a.status === AttendStatus.ATTENDED || a.status === AttendStatus.LATE);
   const totalHeads = active.reduce((s, a) => s + 1 + (a.guestCount || 0), 0);
-  const winningTeamSide = result === "WIN" ? TeamSide.TEAM_A : result === "LOSE" ? TeamSide.TEAM_B : null;
+  const winningTeamSide = currentResult === "WIN" ? TeamSide.TEAM_A : currentResult === "LOSE" ? TeamSide.TEAM_B : null;
   const losingTeamSide = winningTeamSide === TeamSide.TEAM_A ? TeamSide.TEAM_B : winningTeamSide === TeamSide.TEAM_B ? TeamSide.TEAM_A : null;
 
   const winningHeads = winningTeamSide ? active.filter(a => getSide(a) === winningTeamSide).reduce((s, a) => s + 1 + (a.guestCount || 0), 0) : 0;
@@ -142,19 +180,19 @@ async function handleUpdateMatch(request: NextRequest, { params }: Params) {
     await Promise.all(active.map(a => {
       const side = getSide(a);
       let memberResult: MatchResult | null = null;
-      if (result) {
-        if (side === TeamSide.TEAM_A) memberResult = result as MatchResult;
+      if (currentResult) {
+        if (side === TeamSide.TEAM_A) memberResult = currentResult as MatchResult;
         else if (side === TeamSide.TEAM_B) {
-          if (result === "WIN") memberResult = MatchResult.LOSE;
-          else if (result === "LOSE") memberResult = MatchResult.WIN;
+          if (currentResult === "WIN") memberResult = MatchResult.LOSE;
+          else if (currentResult === "LOSE") memberResult = MatchResult.WIN;
           else memberResult = MatchResult.DRAW;
-        } else memberResult = result as MatchResult;
+        } else memberResult = currentResult as MatchResult;
       }
 
       const fpH = resolveFeePH({
-        matchType: match.matchType,
-        result,
-        feeSplitMethod: feeSplitMethod || "EQUAL",
+        matchType: currentType,
+        result: currentResult,
+        feeSplitMethod: updated.feeSplitMethod || "EQUAL",
         feeTotal: updated.feeTotal,
         feeDefault: updated.feeDefault,
         feeWinner: updated.feeWinner,
@@ -185,6 +223,25 @@ export async function PUT(request: NextRequest, ctx: Params) {
 
 export async function PATCH(request: NextRequest, ctx: Params) {
   return handleUpdateMatch(request, ctx);
+}
+
+export async function DELETE(request: NextRequest, { params }: Params) {
+  const session = await auth();
+  if (!session?.user) return NextResponse.json({ error: "Chưa đăng nhập" }, { status: 401 });
+  if (session.user.role !== Role.ADMIN) return NextResponse.json({ error: "Không có quyền" }, { status: 403 });
+
+  const { id } = await params;
+
+  const match = await prisma.matchSession.findUnique({ where: { id } });
+  if (!match) return NextResponse.json({ error: "Trận đấu không tồn tại" }, { status: 404 });
+
+  // Xóa các PaymentSession liên quan trước, sau đó xóa MatchSession
+  await prisma.$transaction([
+    prisma.paymentSession.deleteMany({ where: { matchId: id } }),
+    prisma.matchSession.delete({ where: { id } }),
+  ]);
+
+  return NextResponse.json({ success: true, message: "Đã xóa trận đấu thành công" });
 }
 
 // POST /api/matches/:id — Tạo / Đồng bộ PaymentSession từ kết quả trận

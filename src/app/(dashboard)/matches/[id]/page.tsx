@@ -5,6 +5,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, MapPin, Edit, Users, UserCheck } from "lucide-react";
 import { MatchStatus } from "@prisma/client";
+import { MatchAdminActions } from "@/components/MatchAdminActions";
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
   UPCOMING: { label: "Sắp diễn ra", color: "#60a5fa", bg: "rgba(96,165,250,0.12)" },
@@ -86,9 +87,12 @@ export default async function MatchDetailPage({ params }: Params) {
             </div>
           </div>
           {isAdmin && (
-            <Link href={`/matches/${match.id}/edit`} className="btn btn-primary" style={{ padding: "6px 14px", fontSize: "0.82rem", fontWeight: 700 }}>
-              <Edit size={16} /> Điểm danh & Cập nhật
-            </Link>
+            <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
+              <MatchAdminActions match={match} />
+              <Link href={`/matches/${match.id}/edit`} className="btn btn-primary" style={{ padding: "6px 14px", fontSize: "0.82rem", fontWeight: 700 }}>
+                <Edit size={16} /> Điểm danh & Cập nhật
+              </Link>
+            </div>
           )}
         </div>
 
