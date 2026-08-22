@@ -42,11 +42,8 @@ export default async function TransactionsPage() {
     <div style={{ display: "flex", flexDirection: "column", gap: "28px" }}>
       <div>
         <h1 style={{ fontSize: "1.75rem", fontWeight: 800, color: "var(--card-foreground)", marginBottom: "4px" }}>
-          Lịch sử giao dịch chuyển khoản
+          Lịch sử chuyển khoản
         </h1>
-        <p style={{ color: "var(--muted-foreground)", fontSize: "0.9rem" }}>
-          Danh sách biến động số dư chuyển khoản tự động qua cổng SePay
-        </p>
       </div>
 
       <div className="glass-card" style={{ overflow: "hidden" }}>

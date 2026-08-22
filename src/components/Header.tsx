@@ -19,7 +19,7 @@ const ROUTE_NAMES: Record<string, string> = {
   members: "Thành viên",
   matches: "Trận bóng",
   payments: "Thu tiền",
-  transactions: "Lịch sử ",
+  transactions: "Lịch sử CK",
   admin: "Quản trị",
   "allowed-emails": "Quản lý truy cập",
   new: "Tạo mới",

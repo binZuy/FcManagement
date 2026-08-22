@@ -238,10 +238,10 @@ export default async function DashboardPage() {
       </div>
 
       {/* Main Dashboard Sections */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(360px, 1fr))", gap: "24px" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 300px), 1fr))", gap: "20px", width: "100%" }}>
 
         {/* SECTION 1: TRẬN ĐẤU SẮP TỚI */}
-        <div className="glass-card" style={{ padding: "24px", display: "flex", flexDirection: "column", gap: "20px" }}>
+        <div className="glass-card" style={{ padding: "16px", display: "flex", flexDirection: "column", gap: "16px", width: "100%", overflow: "hidden" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
               <div style={{ width: 36, height: 36, borderRadius: 10, background: "rgba(96,165,250,0.15)", display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -268,11 +268,13 @@ export default async function DashboardPage() {
                 borderRadius: "14px",
                 background: "linear-gradient(135deg, rgba(30,41,59,0.8), rgba(15,23,42,0.9))",
                 border: "1px solid rgba(96,165,250,0.3)",
-                padding: "20px",
+                padding: "16px",
                 display: "flex",
                 flexDirection: "column",
-                gap: "16px",
+                gap: "14px",
                 boxShadow: "0 10px 25px rgba(0,0,0,0.3)",
+                width: "100%",
+                overflow: "hidden",
               }}
             >
               {/* Match Title & Tag */}
@@ -298,6 +300,7 @@ export default async function DashboardPage() {
                     background: "rgba(96,165,250,0.15)",
                     color: "#60a5fa",
                     border: "1px solid rgba(96,165,250,0.3)",
+                    flexShrink: 0,
                   }}
                 >
                   Sắp diễn ra
@@ -305,7 +308,7 @@ export default async function DashboardPage() {
               </div>
 
               {/* Match Details */}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", background: "rgba(0,0,0,0.2)", padding: "14px", borderRadius: "10px" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: "12px", background: "rgba(0,0,0,0.2)", padding: "12px", borderRadius: "10px" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
                   <Clock size={18} color="#60a5fa" />
                   <div>

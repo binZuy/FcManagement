@@ -50,11 +50,8 @@ export default async function PaymentsPage() {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "16px" }}>
         <div>
           <h1 style={{ fontSize: "1.75rem", fontWeight: 800, color: "var(--card-foreground)", marginBottom: "4px" }}>
-            Quản lý Thu tiền theo thành viên
+            Sinh hoạt phí đội bóng
           </h1>
-          <p style={{ color: "var(--muted-foreground)", fontSize: "0.9rem" }}>
-            Danh sách thành viên đang có khoản phí cần thanh toán
-          </p>
         </div>
       </div>
 

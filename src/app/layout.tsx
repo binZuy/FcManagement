@@ -5,7 +5,7 @@ import "./globals.css";
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 
 export const metadata: Metadata = {
-  title: "FC Manager — Quản lý Đội Bóng",
+  title: "FC KTX — Quản lý Đội Bóng",
   description: "Hệ thống quản lý đội bóng: thành viên, lịch thi đấu, thu tiền tự động qua SePay",
   icons: {
     icon: "/football.png",

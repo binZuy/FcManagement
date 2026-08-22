@@ -4,7 +4,7 @@ import Link from "next/link";
 import { Home } from "lucide-react";
 
 export const metadata: Metadata = {
-  title: "Đăng nhập — FC Manager",
+  title: "Đăng nhập — FC KTX",
 };
 
 export default function LoginPage() {
@@ -79,13 +79,13 @@ export default function LoginPage() {
 
         <h1
           style={{
-            fontSize: "1.65rem",
-            fontWeight: 800,
+            fontSize: "1.8rem",
+            fontWeight: 900,
             color: "var(--card-foreground)",
             marginBottom: "6px",
           }}
         >
-          FC Manager
+          FC KTX
         </h1>
         <p
           style={{

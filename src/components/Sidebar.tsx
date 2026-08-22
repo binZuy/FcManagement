@@ -19,7 +19,7 @@ const navItems = [
   { href: "/members", icon: Users, label: "Thành viên" },
   { href: "/matches", icon: CalendarDays, label: "Trận bóng" },
   { href: "/payments", icon: Wallet, label: "Thu tiền" },
-  { href: "/transactions", icon: ArrowLeftRight, label: "Lịch sử" },
+  { href: "/transactions", icon: ArrowLeftRight, label: "Lịch sử CK" },
 ];
 
 const adminItems = [
@@ -65,7 +65,7 @@ export function Sidebar({
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
-          padding: collapsed ? "8px 4px 20px" : "8px 8px 20px",
+          padding: collapsed ? "8px 4px 16px" : "8px 8px 16px",
           borderBottom: "1px solid var(--border)",
           marginBottom: "12px",
         }}
@@ -80,7 +80,7 @@ export function Sidebar({
             justifyContent: collapsed ? "center" : "flex-start",
             width: "100%",
           }}
-          title="Về trang chủ Dashboard"
+          title="Về trang chủ FC KTX"
         >
           <div
             style={{
@@ -100,11 +100,8 @@ export function Sidebar({
           </div>
           {!collapsed && (
             <div>
-              <div style={{ fontWeight: 800, fontSize: "1.05rem", color: "var(--card-foreground)", lineHeight: 1.2 }}>
-                FC Manager
-              </div>
-              <div style={{ fontSize: "0.72rem", color: "var(--primary)", fontWeight: 600, marginTop: "2px" }}>
-                Quản lý Đội Bóng
+              <div style={{ fontWeight: 900, fontSize: "1.2rem", color: "#f1f5f9", letterSpacing: "0.5px" }}>
+                FC KTX
               </div>
             </div>
           )}
@@ -172,11 +169,55 @@ export function Sidebar({
         )}
       </nav>
 
+      {/* Contact & Fanpage info card */}
+      {!collapsed && (
+        <div
+          style={{
+            margin: "12px 0 8px",
+            padding: "10px 12px",
+            borderRadius: "12px",
+            background: "rgba(34,197,94,0.06)",
+            border: "1px solid rgba(34,197,94,0.2)",
+            display: "flex",
+            flexDirection: "column",
+            gap: "5px",
+          }}
+        >
+          <div style={{ fontWeight: 800, color: "#22c55e", fontSize: "0.76rem", display: "flex", alignItems: "center", gap: "6px" }}>
+            <span>⚽</span>
+            <span>Liên hệ & Hẹn giao hữu</span>
+          </div>
+          <div style={{ color: "#cbd5e1", fontSize: "0.72rem" }}>
+            SĐT/Zalo: <strong style={{ color: "#4ade80" }}>0943578595</strong>
+          </div>
+          <a
+            href="https://www.facebook.com/profile.php?id=100075817302952"
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "4px",
+              color: "#60a5fa",
+              fontWeight: 700,
+              textDecoration: "none",
+              fontSize: "0.72rem",
+              marginTop: "2px",
+            }}
+          >
+            👍 Fanpage FC KTX
+          </a>
+          <div style={{ fontSize: "0.64rem", color: "#64748b", lineHeight: 1.2 }}>
+            (Ai chưa like cho mình xin 1 like & 1 theo dõi nhé!)
+          </div>
+        </div>
+      )}
+
       {/* User profile & logout */}
       <div
         style={{
           borderTop: "1px solid var(--border)",
-          paddingTop: "14px",
+          paddingTop: "10px",
           display: "flex",
           flexDirection: "column",
           gap: "8px",
