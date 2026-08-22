@@ -63,11 +63,7 @@ const POPULAR_BANKS = [
   { code: "vpb", name: "VPBank", color: "#4ade80", bg: "rgba(34,197,94,0.14)", border: "rgba(34,197,94,0.3)" },
   { code: "tpb", name: "TPBank", color: "#c084fc", bg: "rgba(192,132,252,0.14)", border: "rgba(192,132,252,0.3)" },
   { code: "icb", name: "VietinBank", color: "#60a5fa", bg: "rgba(96,165,250,0.14)", border: "rgba(96,165,250,0.3)" },
-  { code: "agb", name: "Agribank", color: "#f87171", bg: "rgba(239,68,68,0.14)", border: "rgba(239,68,68,0.3)" },
   { code: "acb", name: "ACB", color: "#38bdf8", bg: "rgba(56,189,248,0.14)", border: "rgba(56,189,248,0.3)" },
-  { code: "stb", name: "Sacombank", color: "#60a5fa", bg: "rgba(96,165,250,0.14)", border: "rgba(96,165,250,0.3)" },
-  { code: "vib", name: "VIB", color: "#38bdf8", bg: "rgba(56,189,248,0.14)", border: "rgba(56,189,248,0.3)" },
-  { code: "momo", name: "MoMo", color: "#f472b6", bg: "rgba(244,114,182,0.14)", border: "rgba(244,114,182,0.3)" },
 ];
 
 export function QRPaymentDialog({
@@ -331,6 +327,7 @@ const BANK_APP_MAP: Record<string, string> = {
 
   const handleSelectBankApp = (appCode: string) => {
     if (!BANK_BIN || !ACCOUNT_NO) return;
+    try { navigator.clipboard.writeText(qrContent); } catch {}
     const encodedContent = encodeURIComponent(qrContent);
     const encodedName = encodeURIComponent(process.env.NEXT_PUBLIC_ACCOUNT_NAME || "FC Management");
     const url = `https://dl.vietqr.io/pay?app=${appCode}&ba=${ACCOUNT_NO}@${BANK_BIN}&am=${totalAmount}&tn=${encodedContent}&bn=${encodedName}`;
@@ -627,9 +624,6 @@ const BANK_APP_MAP: Record<string, string> = {
                 <div>
                   <div style={{ fontWeight: 800, color: "#f1f5f9", fontSize: "0.95rem" }}>
                     Chọn App Ngân Hàng của bạn
-                  </div>
-                  <div style={{ fontSize: "0.72rem", color: "#94a3b8", marginTop: "2px" }}>
-                    Tự động điền số tiền & nội dung khi mở app
                   </div>
                 </div>
               </div>
