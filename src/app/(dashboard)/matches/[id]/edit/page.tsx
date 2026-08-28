@@ -467,10 +467,13 @@ export default function MatchEditPage({ params }: Params) {
   const handleSelectAllAttended = () => {
     const updated = { ...attendances };
     allMembers.forEach((m) => {
+      const currentGuest = updated[m.id]?.guestCount || 0;
+      const currentDrinksGuest = updated[m.id]?.drinksGuestCount || 0;
       updated[m.id] = {
         ...(updated[m.id] ?? { memberId: m.id, guestCount: 0, drinksGuestCount: 0 }),
         status: "ATTENDED",
         isDrinks: true,
+        drinksGuestCount: currentDrinksGuest > 0 ? currentDrinksGuest : currentGuest,
       };
     });
     setAttendances(updated);
@@ -485,6 +488,7 @@ export default function MatchEditPage({ params }: Params) {
         status: "ABSENT",
         guestCount: 0,
         isDrinks: false,
+        drinksGuestCount: 0,
       };
     });
     setAttendances(updated);
@@ -498,6 +502,9 @@ export default function MatchEditPage({ params }: Params) {
         updated[m.id] = {
           ...updated[m.id],
           isDrinks: true,
+          drinksGuestCount: (updated[m.id]?.drinksGuestCount && updated[m.id]?.drinksGuestCount > 0)
+            ? updated[m.id].drinksGuestCount
+            : (updated[m.id]?.guestCount || 0),
         };
       }
     });
@@ -512,6 +519,7 @@ export default function MatchEditPage({ params }: Params) {
         updated[m.id] = {
           ...updated[m.id],
           isDrinks: false,
+          drinksGuestCount: 0,
         };
       }
     });
