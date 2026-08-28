@@ -36,9 +36,9 @@ export async function PATCH(req: NextRequest, props: { params: Promise<{ id: str
 
     if (isSelf) {
       const att = record.session.match?.attendances.find((a) => a.memberId === record.memberId);
-      if (att && (att.guestCount > 0 || att.drinksGuestCount > 0)) {
+      if (att && (att.guestCount > 0 || (att.isDrinks && att.drinksGuestCount > 0))) {
         const totalHeads = 1 + att.guestCount;
-        const drinkHeads = (att.isDrinks ? 1 : 0) + att.drinksGuestCount;
+        const drinkHeads = att.isDrinks ? 1 + (att.drinksGuestCount || 0) : 0;
         const baseFeePerHead = (att.feeAssigned ?? 0) / (totalHeads || 1);
         const drinksFeePerHead = drinkHeads > 0 ? (att.drinksFeeAssigned ?? 0) / (drinkHeads || 1) : 0;
         const memberSelfFee = Math.round(baseFeePerHead + (att.isDrinks ? drinksFeePerHead : 0));

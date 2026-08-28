@@ -173,7 +173,7 @@ async function handleUpdateMatch(request: NextRequest, { params }: Params) {
   const winningHeads = winningTeamSide ? active.filter(a => getSide(a) === winningTeamSide).reduce((s, a) => s + 1 + (a.guestCount || 0), 0) : 0;
   const losingHeads = losingTeamSide ? active.filter(a => getSide(a) === losingTeamSide).reduce((s, a) => s + 1 + (a.guestCount || 0), 0) : 0;
 
-  const drinkHeads = active.reduce((s, a) => s + (a.isDrinks ? 1 : 0) + (a.drinksGuestCount || 0), 0);
+  const drinkHeads = active.reduce((s, a) => s + (a.isDrinks ? 1 + (a.drinksGuestCount || 0) : 0), 0);
   const drinksFeePerHead = drinkHeads > 0 && updated.drinksFeeTotal ? updated.drinksFeeTotal / drinkHeads : 0;
 
   if (active.length > 0) {
@@ -205,7 +205,7 @@ async function handleUpdateMatch(request: NextRequest, { params }: Params) {
       });
 
       const feeAssigned = fpH * (1 + (a.guestCount || 0));
-      const drinksFeeAssigned = ((a.isDrinks ? 1 : 0) + (a.drinksGuestCount || 0)) * drinksFeePerHead;
+      const drinksFeeAssigned = (a.isDrinks ? 1 + (a.drinksGuestCount || 0) : 0) * drinksFeePerHead;
 
       return prisma.matchAttendance.update({
         where: { id: a.id },
@@ -295,7 +295,7 @@ export async function POST(request: NextRequest, { params }: Params) {
   const winningHeads = winningTeamSide ? active.filter(a => getSide(a) === winningTeamSide).reduce((s, a) => s + 1 + (a.guestCount || 0), 0) : 0;
   const losingHeads = losingTeamSide ? active.filter(a => getSide(a) === losingTeamSide).reduce((s, a) => s + 1 + (a.guestCount || 0), 0) : 0;
 
-  const drinkHeads = active.reduce((s, a) => s + (a.isDrinks ? 1 : 0) + (a.drinksGuestCount || 0), 0);
+  const drinkHeads = active.reduce((s, a) => s + (a.isDrinks ? 1 + (a.drinksGuestCount || 0) : 0), 0);
   const drinksFeePerHead = drinkHeads > 0 && match.drinksFeeTotal ? match.drinksFeeTotal / drinkHeads : 0;
 
   const existingRecords: any[] = (paySession as any).paymentRecords ?? [];
@@ -319,7 +319,7 @@ export async function POST(request: NextRequest, { params }: Params) {
       });
 
       const selfFee = fpH + (a.isDrinks ? drinksFeePerHead : 0);
-      const guestFee = (a.guestCount || 0) * fpH + (a.drinksGuestCount || 0) * drinksFeePerHead;
+      const guestFee = (a.guestCount || 0) * fpH + (a.isDrinks ? (a.drinksGuestCount || 0) : 0) * drinksFeePerHead;
       const totalFee = Math.round(selfFee + guestFee);
 
       const noteText = (a.guestCount || 0) > 0
@@ -332,7 +332,7 @@ export async function POST(request: NextRequest, { params }: Params) {
         where: { id: a.id },
         data: {
           feeAssigned: fpH * (1 + (a.guestCount || 0)),
-          drinksFeeAssigned: ((a.isDrinks ? 1 : 0) + (a.drinksGuestCount || 0)) * drinksFeePerHead,
+          drinksFeeAssigned: (a.isDrinks ? 1 + (a.drinksGuestCount || 0) : 0) * drinksFeePerHead,
         },
       });
 

@@ -423,7 +423,7 @@ export default function MatchEditPage({ params }: Params) {
       [memberId]: {
         ...prev[memberId],
         guestCount: val,
-        drinksGuestCount: val,
+        drinksGuestCount: prev[memberId]?.isDrinks ? val : 0,
       },
     }));
   }, []);
@@ -550,7 +550,7 @@ export default function MatchEditPage({ params }: Params) {
         teamSide: att.teamSide || null,
         guestCount: att.guestCount || 0,
         isDrinks: att.isDrinks || false,
-        drinksGuestCount: att.drinksGuestCount || 0,
+        drinksGuestCount: att.isDrinks ? (att.drinksGuestCount || 0) : 0,
       }));
 
       await fetch(`/api/matches/${id}/attendance`, {
@@ -615,7 +615,7 @@ export default function MatchEditPage({ params }: Params) {
         teamSide: att.teamSide || null,
         guestCount: att.guestCount || 0,
         isDrinks: att.isDrinks || false,
-        drinksGuestCount: att.drinksGuestCount || 0,
+        drinksGuestCount: att.isDrinks ? (att.drinksGuestCount || 0) : 0,
       }));
 
       await fetch(`/api/matches/${id}/attendance`, {

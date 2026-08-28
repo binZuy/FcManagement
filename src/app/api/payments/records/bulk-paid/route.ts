@@ -46,9 +46,9 @@ export async function POST(req: NextRequest) {
         // Nếu chỉ tick thu phần Thành viên (_self) mà không tick phần Bạn (_guest) và không tick bản ghi gốc
         if (hasSelf && !hasGuest && !hasPlain) {
           const att = r.session.match?.attendances.find((a) => a.memberId === r.memberId);
-          if (att && (att.guestCount > 0 || att.drinksGuestCount > 0)) {
+          if (att && (att.guestCount > 0 || (att.isDrinks && att.drinksGuestCount > 0))) {
             const totalHeads = 1 + att.guestCount;
-            const drinkHeads = (att.isDrinks ? 1 : 0) + att.drinksGuestCount;
+            const drinkHeads = att.isDrinks ? 1 + (att.drinksGuestCount || 0) : 0;
             const baseFeePerHead = (att.feeAssigned ?? 0) / (totalHeads || 1);
             const drinksFeePerHead = drinkHeads > 0 ? (att.drinksFeeAssigned ?? 0) / (drinkHeads || 1) : 0;
             const memberSelfFee = Math.round(baseFeePerHead + (att.isDrinks ? drinksFeePerHead : 0));

@@ -47,7 +47,7 @@ export default async function PaymentDetailPage({ params }: Params) {
   session.paymentRecords.forEach((record) => {
     const att = session.match?.attendances.find((a) => a.memberId === record.memberId);
     const guestCount = att?.guestCount || 0;
-    const drinksGuestCount = att?.drinksGuestCount || 0;
+    const drinksGuestCount = att?.isDrinks ? (att?.drinksGuestCount || 0) : 0;
     const hasGuests = guestCount > 0 || drinksGuestCount > 0;
 
     if (!hasGuests) {
@@ -69,7 +69,7 @@ export default async function PaymentDetailPage({ params }: Params) {
     } else {
       // Có bạn đi cùng → bóc tách thành 2 dòng
       const totalHeads = 1 + guestCount;
-      const drinkHeads = (att?.isDrinks ? 1 : 0) + drinksGuestCount;
+      const drinkHeads = att?.isDrinks ? 1 + drinksGuestCount : 0;
       const baseFeePerHead = (att?.feeAssigned ?? 0) / (totalHeads || 1);
       const drinksFeePerHead = drinkHeads > 0 ? (att?.drinksFeeAssigned ?? 0) / (drinkHeads || 1) : 0;
 
