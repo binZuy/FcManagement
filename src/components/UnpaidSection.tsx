@@ -334,9 +334,9 @@ export function UnpaidSection({
                   <div style={{ fontSize: "0.75rem", color: "#fb923c", fontWeight: 600, marginTop: "2px" }}>
                     {isOnlyGuestDebt ? (
                       "• Bạn"
-                    ) : (
+                    ) : r.note ? (
                       `• ${r.note.replace("Khách đi cùng", "Bạn").replace("Bạn đi cùng", "Bạn").replace("+", "")}`
-                    )}
+                    ) : null}
                   </div>
                 )}
                 {/* Chỉ hiển thị hạn nộp nếu có — bỏ status & yêu cầu vì thừa */}
