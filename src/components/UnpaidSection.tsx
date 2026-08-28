@@ -328,12 +328,17 @@ export function UnpaidSection({
                   }}
                 >
                   {cleanTitle}
-                  {isOnlyGuestDebt ? (
-                    <span style={{ color: "#fb923c", fontWeight: 700 }}> - Bạn</span>
-                  ) : r.note ? (
-                    <span style={{ color: "#fb923c", fontWeight: 600 }}> ({r.note.replace("Khách đi cùng", "Bạn").replace("Bạn đi cùng", "Bạn").replace("+", "")})</span>
-                  ) : null}
                 </div>
+
+                {(isOnlyGuestDebt || r.note) && (
+                  <div style={{ fontSize: "0.75rem", color: "#fb923c", fontWeight: 600, marginTop: "2px" }}>
+                    {isOnlyGuestDebt ? (
+                      "• Bạn"
+                    ) : (
+                      `• ${r.note.replace("Khách đi cùng", "Bạn").replace("Bạn đi cùng", "Bạn").replace("+", "")}`
+                    )}
+                  </div>
+                )}
                 {/* Chỉ hiển thị hạn nộp nếu có — bỏ status & yêu cầu vì thừa */}
                 {r.session.dueDate && (
                   <div style={{ fontSize: "0.72rem", color: "var(--muted-foreground)", marginTop: "3px" }}>
