@@ -74,6 +74,7 @@ model User {
   accounts Account[]
   sessions Session[]
   member   Member?
+  comments MatchComment[]
 
   @@map("users")
 }
@@ -94,6 +95,9 @@ model Member {
   joinDate     DateTime     @default(now())
   status       MemberStatus @default(ACTIVE)
   note         String?      @db.Text
+  lateFee      Float        @default(0) // Phí phạt nộp chậm hiện tại
+  lateDaysCount Int         @default(0) // Số ngày nộp chậm tích luỹ (cho tổng kết cuối năm)
+  lateFeePaidTotal Float    @default(0) // Tổng tiền phạt đã nộp lũy kế
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt
 
@@ -101,6 +105,7 @@ model Member {
   attendances     MatchAttendance[]
   paymentRecords  PaymentRecord[]
   paymentBundles  PaymentBundle[]
+  motmMatches     MatchSession[]    @relation("MatchMotm")
 
   @@map("members")
 }
@@ -144,10 +149,29 @@ model MatchSession {
   createdAt    DateTime    @default(now())
   updatedAt    DateTime    @updatedAt
 
+  motmMemberId   String?
+  motmMember     Member?           @relation("MatchMotm", fields: [motmMemberId], references: [id])
+  motmNote       String?
+  photos         String[]          @default([])
   attendances     MatchAttendance[]
   paymentSessions PaymentSession[]
+  comments        MatchComment[]
 
   @@map("match_sessions")
+}
+
+model MatchComment {
+  id        String       @id @default(cuid())
+  matchId   String
+  userId    String?
+  guestName String?
+  content   String       @db.Text
+  createdAt DateTime     @default(now())
+
+  match     MatchSession @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  user      User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@map("match_comments")
 }
 
 enum MatchType {

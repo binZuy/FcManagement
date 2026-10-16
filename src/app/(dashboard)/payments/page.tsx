@@ -5,6 +5,8 @@ import Link from "next/link";
 import { Wallet, Users, CheckCircle, AlertCircle, ChevronRight } from "lucide-react";
 import { RecordStatus } from "@prisma/client";
 
+import { calculateLatePenalty } from "@/lib/fee-calculator";
+
 export default async function PaymentsPage() {
   const session = await auth();
   const isAdmin = session?.user?.role === "ADMIN";
@@ -16,7 +18,7 @@ export default async function PaymentsPage() {
         where: {
           status: { in: [RecordStatus.PENDING, RecordStatus.OVERDUE] },
         },
-        select: { status: true, amountRequired: true, amountPaid: true },
+        select: { status: true, amountRequired: true, amountPaid: true, createdAt: true },
       },
     },
   });
@@ -26,11 +28,15 @@ export default async function PaymentsPage() {
       (r) => r.status !== RecordStatus.PAID && r.status !== RecordStatus.WAIVED
     );
     const unpaidCount = unpaidRecords.length;
-    const debt = unpaidRecords.reduce((sum, r) => sum + (r.amountRequired - r.amountPaid), 0);
+    const baseDebt = unpaidRecords.reduce((sum, r) => sum + (r.amountRequired - r.amountPaid), 0);
+    const penalty = calculateLatePenalty(unpaidRecords);
+    const debt = baseDebt + penalty.lateFee;
 
     return {
       ...m,
       unpaidCount,
+      baseDebt,
+      penalty,
       debt,
     };
   });
@@ -41,6 +47,8 @@ export default async function PaymentsPage() {
     .sort((a, b) => b.debt - a.debt);
 
   const totalOwed = memberStats.reduce((sum, m) => sum + m.debt, 0);
+  const totalLatePenalties = memberStats.reduce((sum, m) => sum + m.penalty.lateFee, 0);
+  const currentWheelFund = 20000 + totalLatePenalties; // Quỹ khởi điểm 20k + phạt nộp chậm
   const membersWithDebt = debtMembers.length;
   const doneMembers = memberStats.filter((m) => m.debt === 0).length;
 
@@ -107,6 +115,56 @@ export default async function PaymentsPage() {
 
 
 
+      {/* BANNER QUỸ VÒNG QUAY MAY MẮN */}
+      <Link href="/lucky-wheel" style={{ textDecoration: "none" }}>
+        <div 
+          className="glass-card" 
+          style={{ 
+            padding: "16px 20px", 
+            borderRadius: "14px", 
+            background: "linear-gradient(135deg, rgba(234,179,8,0.15), rgba(15,23,42,0.9))", 
+            border: "1px solid rgba(234,179,8,0.35)",
+            display: "flex", 
+            justifyContent: "space-between", 
+            alignItems: "center",
+            flexWrap: "wrap",
+            gap: "12px",
+            boxShadow: "0 8px 24px rgba(234,179,8,0.15)"
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+            <div style={{ width: 42, height: 42, borderRadius: "50%", background: "linear-gradient(135deg, #facc15, #eab308)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.4rem" }}>
+              🎡
+            </div>
+            <div>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <span style={{ fontWeight: 800, fontSize: "1.05rem", color: "#facc15" }}>
+                  Quỹ Thưởng Vòng Quay May Mắn
+                </span>
+                <span style={{ fontSize: "0.7rem", padding: "1px 6px", borderRadius: "4px", background: "rgba(250,204,21,0.2)", color: "#fef08a", fontWeight: 700 }}>
+                  20k gốc + Phạt trễ
+                </span>
+              </div>
+              <div style={{ fontSize: "0.78rem", color: "var(--muted-foreground)", marginTop: "2px" }}>
+                Toàn bộ tiền phạt nộp chậm được chuyển vào quỹ thưởng cho anh em quay thưởng!
+              </div>
+            </div>
+          </div>
+
+          <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
+            <div style={{ textAlign: "right" }}>
+              <div style={{ fontSize: "1.3rem", fontWeight: 900, color: "#facc15" }}>
+                {formatCurrency(currentWheelFund)}
+              </div>
+              <div style={{ fontSize: "0.7rem", color: "#fef08a" }}>
+                Nhấn để vào quay thưởng →
+              </div>
+            </div>
+            <ChevronRight size={20} color="#facc15" />
+          </div>
+        </div>
+      </Link>
+
       {/* Members List (Chỉ hiển thị thành viên nợ tiền) */}
       <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
         {debtMembers.length === 0 && (
@@ -122,6 +180,8 @@ export default async function PaymentsPage() {
         )}
         {debtMembers.map((member) => {
           const hasDebt = member.debt > 0;
+          const isPenalized = member.penalty.isPenalized;
+
           return (
             <Link key={member.id} href={`/payments/${member.id}`} style={{ textDecoration: "none" }}>
               <div
@@ -129,8 +189,8 @@ export default async function PaymentsPage() {
                 style={{
                   padding: "16px 20px",
                   transition: "border-color 0.2s",
-                  border: hasDebt ? "1px solid rgba(248,113,113,0.15)" : "1px solid var(--border)",
-                  background: hasDebt ? "rgba(239,68,68,0.02)" : undefined
+                  border: isPenalized ? "1px solid rgba(239,68,68,0.4)" : hasDebt ? "1px solid rgba(248,113,113,0.15)" : "1px solid var(--border)",
+                  background: isPenalized ? "rgba(239,68,68,0.06)" : hasDebt ? "rgba(239,68,68,0.02)" : undefined
                 }}
               >
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "16px" }}>
@@ -139,7 +199,7 @@ export default async function PaymentsPage() {
                       <img
                         src={member.user.image}
                         alt=""
-                        style={{ width: 44, height: 44, borderRadius: "50%", border: hasDebt ? "2px solid #fb923c" : "2px solid #4ade80" }}
+                        style={{ width: 44, height: 44, borderRadius: "50%", border: isPenalized ? "2px solid #ef4444" : hasDebt ? "2px solid #fb923c" : "2px solid #4ade80" }}
                       />
                     ) : (
                       <div
@@ -147,14 +207,14 @@ export default async function PaymentsPage() {
                           width: 44,
                           height: 44,
                           borderRadius: "50%",
-                          background: hasDebt ? "rgba(251,146,60,0.1)" : "rgba(74,222,128,0.1)",
-                          color: hasDebt ? "#fb923c" : "#4ade80",
+                          background: isPenalized ? "rgba(239,68,68,0.15)" : hasDebt ? "rgba(251,146,60,0.1)" : "rgba(74,222,128,0.1)",
+                          color: isPenalized ? "#ef4444" : hasDebt ? "#fb923c" : "#4ade80",
                           display: "flex",
                           alignItems: "center",
                           justifyContent: "center",
                           fontSize: "16px",
                           fontWeight: 700,
-                          border: hasDebt ? "2px solid #fb923c" : "2px solid #4ade80"
+                          border: isPenalized ? "2px solid #ef4444" : hasDebt ? "2px solid #fb923c" : "2px solid #4ade80"
                         }}
                       >
                         {member.user.name?.[0]?.toUpperCase()}
@@ -175,16 +235,21 @@ export default async function PaymentsPage() {
                           borderRadius: "999px",
                           fontSize: "0.7rem",
                           fontWeight: 600,
-                          color: hasDebt ? "#fb923c" : "#4ade80",
-                          background: hasDebt ? "rgba(251,146,60,0.12)" : "rgba(34,197,94,0.12)",
+                          color: isPenalized ? "#ef4444" : hasDebt ? "#fb923c" : "#4ade80",
+                          background: isPenalized ? "rgba(239,68,68,0.15)" : hasDebt ? "rgba(251,146,60,0.12)" : "rgba(34,197,94,0.12)",
                         }}>
-                          {hasDebt ? "Chưa đóng" : "Đã xong"}
+                          {isPenalized ? `🚨 Phạt nộp chậm (Trận ${member.unpaidCount})` : hasDebt ? "Chưa đóng" : "Đã xong"}
                         </span>
                       </div>
                       <div style={{ fontSize: "0.78rem", color: "var(--muted-foreground)", marginTop: "4px" }}>
                         Mã CK: <strong style={{ color: "var(--primary)" }}>{process.env.NEXT_PUBLIC_TRANSFER_PREFIX ?? "FCKX"} {member.code}</strong>
                         {hasDebt && ` · Chưa đóng ${member.unpaidCount} trận`}
                       </div>
+                      {isPenalized && (
+                        <div style={{ fontSize: "0.74rem", color: "#f87171", marginTop: "3px", fontWeight: 600 }}>
+                          Gốc: {formatCurrency(member.baseDebt)} + Phạt trễ ({member.penalty.daysLate} ngày): +{formatCurrency(member.penalty.lateFee)}
+                        </div>
+                      )}
                     </div>
                   </div>
                   
@@ -193,8 +258,8 @@ export default async function PaymentsPage() {
                       <div style={{ fontSize: "1.15rem", fontWeight: 800, color: hasDebt ? "#f87171" : "#4ade80" }}>
                         {hasDebt ? formatCurrency(member.debt) : "Đã hoàn thành"}
                       </div>
-                      <div style={{ fontSize: "0.72rem", color: "var(--muted-foreground)", marginTop: "2px" }}>
-                        {hasDebt ? "Cần thanh toán" : "Đã đóng đủ"}
+                      <div style={{ fontSize: "0.72rem", color: isPenalized ? "#f87171" : "var(--muted-foreground)", marginTop: "2px" }}>
+                        {isPenalized ? "Bao gồm phí phạt nộp chậm" : hasDebt ? "Cần thanh toán" : "Đã đóng đủ"}
                       </div>
                     </div>
                     <ChevronRight size={18} style={{ color: "var(--muted-foreground)", opacity: 0.5 }} />

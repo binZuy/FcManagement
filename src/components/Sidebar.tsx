@@ -11,6 +11,7 @@ import {
   ShieldCheck,
   LogOut,
   X,
+  Sparkles,
 } from "lucide-react";
 import { signOut } from "next-auth/react";
 
@@ -19,6 +20,7 @@ const navItems = [
   { href: "/members", icon: Users, label: "Thành viên" },
   { href: "/matches", icon: CalendarDays, label: "Trận bóng" },
   { href: "/payments", icon: Wallet, label: "Thu tiền" },
+  { href: "/lucky-wheel", icon: Sparkles, label: "Vòng quay 🎡" },
   { href: "/transactions", icon: ArrowLeftRight, label: "Lịch sử CK" },
 ];
 

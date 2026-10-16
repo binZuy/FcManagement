@@ -3,7 +3,7 @@
 import { useState, useEffect, use, useCallback, memo } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, CheckCircle, Save, Users, Trophy, Coffee, Search, CheckSquare, Square, UserCheck, Loader2 } from "lucide-react";
+import { ArrowLeft, CheckCircle, Save, Users, Trophy, Coffee, Search, CheckSquare, Square, UserCheck, Loader2, Star, Image as ImageIcon, Plus, Trash2 } from "lucide-react";
 import { showToast } from "@/components/Toast";
 import { FEE_SPLIT_METHOD, FEE_SPLIT_METHOD_LABELS } from "@/lib/constants";
 
@@ -335,6 +335,12 @@ export default function MatchEditPage({ params }: Params) {
   const [drinksFeeTotal, setDrinksFeeTotal] = useState<string>("");
   const [feeSplitMethod, setFeeSplitMethod] = useState<string>("EQUAL");
   
+  // MOTM & Photos state
+  const [motmMemberId, setMotmMemberId] = useState<string>("");
+  const [motmNote, setMotmNote] = useState<string>("");
+  const [photos, setPhotos] = useState<string[]>([]);
+  const [newPhotoUrl, setNewPhotoUrl] = useState<string>("");
+  
   // Attendance state
   const [attendances, setAttendances] = useState<Record<string, any>>({});
   const [allMembers, setAllMembers] = useState<any[]>([]);
@@ -359,6 +365,9 @@ export default function MatchEditPage({ params }: Params) {
         setFeeTotal(m.feeTotal ? String(m.feeTotal) : "");
         setDrinksFeeTotal(m.drinksFeeTotal ? String(m.drinksFeeTotal) : "");
         setFeeSplitMethod(m.feeSplitMethod ?? "EQUAL");
+        setMotmMemberId(m.motmMemberId ?? "");
+        setMotmNote(m.motmNote ?? "");
+        setPhotos(m.photos ?? []);
         
         setAllMembers(membersData.data ?? []);
         
@@ -576,6 +585,9 @@ export default function MatchEditPage({ params }: Params) {
           feeTotal: feeTotal ? parseFloat(feeTotal) : null,
           drinksFeeTotal: drinksFeeTotal ? parseFloat(drinksFeeTotal) : null,
           feeSplitMethod: isInternal ? feeSplitMethod : "EQUAL",
+          motmMemberId: motmMemberId || null,
+          motmNote: motmNote || null,
+          photos: photos || [],
         }),
       });
 
@@ -639,6 +651,9 @@ export default function MatchEditPage({ params }: Params) {
         feeTotal: feeTotal ? parseFloat(feeTotal) : null,
         drinksFeeTotal: drinksFeeTotal ? parseFloat(drinksFeeTotal) : null,
         feeSplitMethod: isInternal ? feeSplitMethod : "EQUAL",
+        motmMemberId: motmMemberId || null,
+        motmNote: motmNote || null,
+        photos: photos || [],
       };
 
       const res = await fetch(`/api/matches/${id}`, {
@@ -995,6 +1010,119 @@ export default function MatchEditPage({ params }: Params) {
               ))}
           </div>
         )}
+      </div>
+
+      {/* BƯỚC 4: VINH DANH MOTM & KỶ NIỆM ẢNH */}
+      <div className="glass-card" style={{ padding: "20px", display: "flex", flexDirection: "column", gap: "16px", border: "1px solid rgba(250,204,21,0.25)" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+          <div style={{ width: 34, height: 34, borderRadius: 8, background: "rgba(250,204,21,0.15)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <Star size={18} color="#facc15" fill="#facc15" />
+          </div>
+          <div>
+            <h3 style={{ fontSize: "1.05rem", fontWeight: 800, color: "#facc15" }}>
+              Bước 4: Vinh Danh MOTM & Ảnh Kỷ Niệm ⭐
+            </h3>
+            <div style={{ fontSize: "0.75rem", color: "var(--muted-foreground)" }}>
+              Chọn cầu thủ xuất sắc nhất và lưu khoảnh khắc đẹp của trận đấu
+            </div>
+          </div>
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: "14px" }}>
+          {/* Chọn Cầu thủ xuất sắc nhất */}
+          <div>
+            <label style={{ display: "block", marginBottom: "6px", fontSize: "0.85rem", color: "var(--muted-foreground)", fontWeight: 600 }}>
+              Cầu thủ xuất sắc nhất trận (MOTM)
+            </label>
+            <select
+              value={motmMemberId}
+              onChange={(e) => setMotmMemberId(e.target.value)}
+              className="form-input"
+              style={{ background: "#1e293b", borderColor: motmMemberId ? "#facc15" : "var(--border)" }}
+            >
+              <option value="">-- Chưa chọn MOTM --</option>
+              {allMembers
+                .filter((m) => attendances[m.id]?.status === "ATTENDED")
+                .map((m) => (
+                  <option key={m.id} value={m.id}>
+                    ⭐ {m.user.name || m.code} {m.jerseyNumber ? `(#${m.jerseyNumber})` : ""} - Mã: {m.code}
+                  </option>
+                ))}
+              {allMembers.filter((m) => attendances[m.id]?.status === "ATTENDED").length === 0 && (
+                allMembers.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.user.name || m.code} - {m.code}
+                  </option>
+                ))
+              )}
+            </select>
+          </div>
+
+          {/* Lời bình MOTM */}
+          <div>
+            <label style={{ display: "block", marginBottom: "6px", fontSize: "0.85rem", color: "var(--muted-foreground)", fontWeight: 600 }}>
+              Lời bình / Lý do vinh danh
+            </label>
+            <input
+              type="text"
+              value={motmNote}
+              onChange={(e) => setMotmNote(e.target.value)}
+              className="form-input"
+              placeholder="VD: Hattrick xuất thần, Cứu thua phút cuối..."
+            />
+          </div>
+        </div>
+
+        {/* Quản lý ảnh kỷ niệm */}
+        <div style={{ borderTop: "1px solid rgba(255,255,255,0.06)", paddingTop: "14px" }}>
+          <label style={{ display: "block", marginBottom: "6px", fontSize: "0.85rem", color: "var(--muted-foreground)", fontWeight: 600 }}>
+            📸 Thêm link ảnh kỷ niệm trận bóng (Ảnh chụp cả đội, khoảnh khắc đẹp):
+          </label>
+          <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+            <input
+              type="url"
+              value={newPhotoUrl}
+              onChange={(e) => setNewPhotoUrl(e.target.value)}
+              className="form-input"
+              placeholder="Dán link ảnh (https://...)"
+              style={{ flex: 1 }}
+            />
+            <button
+              type="button"
+              onClick={() => {
+                const trimmed = newPhotoUrl.trim();
+                if (trimmed) {
+                  setPhotos((prev) => [...prev, trimmed]);
+                  setNewPhotoUrl("");
+                }
+              }}
+              className="btn btn-secondary"
+              style={{ padding: "8px 14px", fontSize: "0.82rem", whiteSpace: "nowrap" }}
+            >
+              <Plus size={15} /> Thêm ảnh
+            </button>
+          </div>
+
+          {/* Danh sách ảnh đã thêm */}
+          {photos.length > 0 && (
+            <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", marginTop: "12px" }}>
+              {photos.map((p, idx) => (
+                <div key={idx} style={{ position: "relative", width: 90, height: 65, borderRadius: "8px", overflow: "hidden", border: "1px solid rgba(255,255,255,0.2)" }}>
+                  <img src={p} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                  <button
+                    type="button"
+                    onClick={() => setPhotos((prev) => prev.filter((_, i) => i !== idx))}
+                    style={{
+                      position: "absolute", top: 2, right: 2, background: "rgba(0,0,0,0.7)", border: "none", color: "#f87171", borderRadius: "4px", padding: "2px", cursor: "pointer"
+                    }}
+                  >
+                    <Trash2 size={12} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Footer Submit Bar với 2 nút rút gọn nằm cùng 1 dòng */}

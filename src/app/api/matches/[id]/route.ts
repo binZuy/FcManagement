@@ -29,6 +29,13 @@ export async function GET(_req: NextRequest, { params }: Params) {
         },
         orderBy: { member: { user: { name: "asc" } } },
       },
+      motmMember: {
+        include: { user: { select: { name: true, image: true } } },
+      },
+      comments: {
+        include: { user: { select: { name: true, image: true } } },
+        orderBy: { createdAt: "desc" },
+      },
       paymentSessions: {
         include: { _count: { select: { paymentRecords: true } } },
       },
@@ -115,7 +122,10 @@ async function handleUpdateMatch(request: NextRequest, { params }: Params) {
     feeDefault,
     feeTotal,
     drinksFeeTotal,
-    feeSplitMethod
+    feeSplitMethod,
+    motmMemberId,
+    motmNote,
+    photos,
   } = body;
 
   const match = await prisma.matchSession.findUnique({
@@ -140,6 +150,9 @@ async function handleUpdateMatch(request: NextRequest, { params }: Params) {
     feeDefault: feeDefault != null ? parseFloat(feeDefault) : undefined,
     drinksFeeTotal: drinksFeeTotal != null ? parseFloat(drinksFeeTotal) : undefined,
     feeSplitMethod: feeSplitMethod ?? undefined,
+    motmMemberId: motmMemberId !== undefined ? (motmMemberId ? motmMemberId : null) : undefined,
+    motmNote: motmNote !== undefined ? motmNote : undefined,
+    photos: photos !== undefined && Array.isArray(photos) ? photos : undefined,
   };
 
   if (matchDate) {
