@@ -47,8 +47,6 @@ export default async function PaymentsPage() {
     .sort((a, b) => b.debt - a.debt);
 
   const totalOwed = memberStats.reduce((sum, m) => sum + m.debt, 0);
-  const totalLatePenalties = memberStats.reduce((sum, m) => sum + m.penalty.lateFee, 0);
-  const currentWheelFund = 20000 + totalLatePenalties; // Quỹ khởi điểm 20k + phạt nộp chậm
   const membersWithDebt = debtMembers.length;
   const doneMembers = memberStats.filter((m) => m.debt === 0).length;
 
@@ -114,46 +112,6 @@ export default async function PaymentsPage() {
       )}
 
 
-
-      {/* BANNER QUỸ VÒNG QUAY MAY MẮN */}
-      <Link href="/lucky-wheel" style={{ textDecoration: "none" }}>
-        <div 
-          className="glass-card" 
-          style={{ 
-            padding: "16px 20px", 
-            borderRadius: "14px", 
-            background: "linear-gradient(135deg, rgba(234,179,8,0.15), rgba(15,23,42,0.9))", 
-            border: "1px solid rgba(234,179,8,0.35)",
-            display: "flex", 
-            justifyContent: "space-between", 
-            alignItems: "center",
-            flexWrap: "wrap",
-            gap: "12px",
-            boxShadow: "0 8px 24px rgba(234,179,8,0.15)"
-          }}
-        >
-          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-            <div style={{ width: 42, height: 42, borderRadius: "50%", background: "linear-gradient(135deg, #facc15, #eab308)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.4rem" }}>
-              🎡
-            </div>
-            <div>
-              <div style={{ fontWeight: 800, fontSize: "1.05rem", color: "#facc15" }}>
-                Vòng quay may mắn
-              </div>
-              <div style={{ fontSize: "0.75rem", color: "var(--muted-foreground)", marginTop: "2px" }}>
-                Quỹ thưởng: {formatCurrency(currentWheelFund)}
-              </div>
-            </div>
-          </div>
-
-          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-            <span style={{ fontSize: "0.8rem", color: "#fef08a", fontWeight: 700 }}>
-              Quay ngay
-            </span>
-            <ChevronRight size={18} color="#facc15" />
-          </div>
-        </div>
-      </Link>
 
       {/* Members List (Chỉ hiển thị thành viên nợ tiền) */}
       <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>

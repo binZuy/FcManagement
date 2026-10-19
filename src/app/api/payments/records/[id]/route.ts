@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
+import { checkAndAwardCleanPaymentSpin } from "@/lib/rewards";
 
 export async function PATCH(req: NextRequest, props: { params: Promise<{ id: string }> }) {
   try {
@@ -59,6 +60,10 @@ export async function PATCH(req: NextRequest, props: { params: Promise<{ id: str
         paidAt: finalStatus === "PAID" ? new Date() : undefined,
       },
     });
+
+    if (finalStatus === "PAID") {
+      await checkAndAwardCleanPaymentSpin(record.memberId);
+    }
 
     return NextResponse.json(updatedRecord);
   } catch (error: any) {

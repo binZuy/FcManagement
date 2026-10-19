@@ -72,10 +72,31 @@ export async function POST(req: NextRequest) {
     ]);
 
     // Buoc 3: Tinh toan (pure JS)
-    const totalAmount = records.reduce(
+    let discount = 0;
+    const { rewardId } = body as { rewardId?: string };
+    if (rewardId) {
+      const reward = await prisma.memberReward.findFirst({
+        where: { id: rewardId, memberId, isUsed: false },
+      });
+      if (reward) {
+        if (reward.isFreeMatch) {
+          discount = records[0] ? Math.max(0, records[0].amountRequired - records[0].amountPaid) : 0;
+        } else if (reward.discountAmount > 0) {
+          discount = reward.discountAmount;
+        }
+        // Đánh dấu đã dùng voucher
+        await prisma.memberReward.update({
+          where: { id: reward.id },
+          data: { isUsed: true, usedAt: new Date() },
+        });
+      }
+    }
+
+    const rawTotalAmount = records.reduce(
       (sum, r) => sum + (r.amountRequired - r.amountPaid),
       0
     );
+    const totalAmount = Math.max(0, rawTotalAmount - discount);
     const bundleCode = generateBundleCode();
     const prefix = process.env.NEXT_PUBLIC_TRANSFER_PREFIX ?? "FCKX";
     const qrContent = `${prefix} ${member.code}-${bundleCode}`;

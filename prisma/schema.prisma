@@ -98,6 +98,7 @@ model Member {
   lateFee      Float        @default(0) // Phí phạt nộp chậm hiện tại
   lateDaysCount Int         @default(0) // Số ngày nộp chậm tích luỹ (cho tổng kết cuối năm)
   lateFeePaidTotal Float    @default(0) // Tổng tiền phạt đã nộp lũy kế
+  spinsAvailable   Int      @default(0) // Số lượt quay may mắn khả dụng
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt
 
@@ -106,8 +107,28 @@ model Member {
   paymentRecords  PaymentRecord[]
   paymentBundles  PaymentBundle[]
   motmMatches     MatchSession[]    @relation("MatchMotm")
+  rewards         MemberReward[]
 
   @@map("members")
+}
+
+model MemberReward {
+  id             String    @id @default(cuid())
+  memberId       String
+  prizeId        String    // "1".."6"
+  label          String    // Tên giải thưởng
+  icon           String    @default("🎁")
+  discountAmount Float     @default(0) // 5000 cho discount 5k
+  isFreeMatch    Boolean   @default(false) // true cho jackpot free tiền sân
+  isFreeDrink    Boolean   @default(false) // true cho được Duy mời nước
+  isUsed         Boolean   @default(false)
+  usedAt         DateTime?
+  note           String?
+  createdAt      DateTime  @default(now())
+
+  member Member @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  @@map("member_rewards")
 }
 
 enum MemberStatus {

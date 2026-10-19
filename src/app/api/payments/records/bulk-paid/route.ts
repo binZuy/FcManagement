@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 import { Role, RecordStatus, PayMethod } from "@prisma/client";
+import { checkAndAwardCleanPaymentSpin } from "@/lib/rewards";
 
 // POST /api/payments/records/bulk-paid — Bulk mark records as paid
 export async function POST(req: NextRequest) {
@@ -71,6 +72,10 @@ export async function POST(req: NextRequest) {
         });
       })
     );
+
+    // Kiểm tra và thưởng 1 lượt quay nếu thành viên đã thanh toán sạch toàn bộ bill
+    const uniqueMemberIds = Array.from(new Set(records.map((r) => r.memberId)));
+    await Promise.all(uniqueMemberIds.map((mId) => checkAndAwardCleanPaymentSpin(mId)));
 
     return NextResponse.json({
       success: true,

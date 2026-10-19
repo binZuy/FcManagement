@@ -1,6 +1,7 @@
 import crypto from "crypto";
 import { prisma } from "@/lib/prisma";
 import { RecordStatus, PayMethod, BundleStatus } from "@prisma/client";
+import { checkAndAwardCleanPaymentSpin } from "@/lib/rewards";
 
 /**
  * Verify SePay HMAC-SHA256 signature or Secret Token
@@ -242,6 +243,9 @@ export async function processSepayTransaction(
       }),
     ]);
 
+    // Thưởng lượt quay may mắn nếu thành viên không còn nợ trận nào
+    await checkAndAwardCleanPaymentSpin(bundle.memberId);
+
     console.log(`[SePay] Khớp thành công Bundle: ${bundle.bundleCode} cho TV ${bundle.member?.code}`);
     return {
       matched: true,
@@ -290,6 +294,9 @@ export async function processSepayTransaction(
         },
       }),
     ]);
+
+    // Thưởng lượt quay may mắn nếu thành viên không còn nợ trận nào
+    await checkAndAwardCleanPaymentSpin(member.id);
 
     console.log(`[SePay] ✅ Session matched: ${memberCode} / ${sessionCode}`);
     return { matched: true, matchType: "session", memberCode, sessionCode };

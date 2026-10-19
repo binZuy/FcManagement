@@ -21,10 +21,20 @@ interface UnpaidRecord {
   };
 }
 
+export interface ActiveReward {
+  id: string;
+  label: string;
+  icon: string;
+  discountAmount: number;
+  isFreeMatch: boolean;
+  isFreeDrink: boolean;
+}
+
 interface UnpaidSectionProps {
   memberId: string;
   memberCode: string;
   memberName: string;
+  activeRewards?: ActiveReward[];
   unpaidRecords: UnpaidRecord[];
   isAdmin: boolean;
 }
@@ -42,6 +52,7 @@ export function UnpaidSection({
   memberId,
   memberCode,
   memberName,
+  activeRewards = [],
   unpaidRecords,
   isAdmin,
 }: UnpaidSectionProps) {
@@ -51,6 +62,7 @@ export function UnpaidSection({
   const [selectedIds, setSelectedIds] = useState<Set<string>>(
     new Set(unpaidRecords.map((r) => r.id))
   );
+  const [appliedRewardId, setAppliedRewardId] = useState<string | null>(null);
   const [isBulkLoading, setIsBulkLoading] = useState(false);
   const [isBulkConfirming, setIsBulkConfirming] = useState(false);
 
@@ -102,9 +114,21 @@ export function UnpaidSection({
   };
 
   // Tính tổng tiền các khoản đã tick
-  const selectedTotal = unpaidRecords
-    .filter((r) => selectedIds.has(r.id))
-    .reduce((sum, r) => sum + (r.amountRequired - r.amountPaid), 0);
+  const selectedRecords = unpaidRecords.filter((r) => selectedIds.has(r.id));
+  const selectedTotal = selectedRecords.reduce((sum, r) => sum + (r.amountRequired - r.amountPaid), 0);
+
+  // Tính discount nếu có voucher được áp dụng
+  const appliedReward = activeRewards.find((rw) => rw.id === appliedRewardId);
+  let discountAmount = 0;
+  if (appliedReward && selectedRecords.length > 0) {
+    if (appliedReward.isFreeMatch) {
+      discountAmount = selectedRecords[0] ? (selectedRecords[0].amountRequired - selectedRecords[0].amountPaid) : 0;
+    } else if (appliedReward.discountAmount > 0) {
+      discountAmount = appliedReward.discountAmount;
+    }
+  }
+
+  const finalTotalAmount = Math.max(0, selectedTotal - discountAmount);
 
   const totalDebt = unpaidRecords.reduce(
     (sum, r) => sum + (r.amountRequired - r.amountPaid),
@@ -129,7 +153,7 @@ export function UnpaidSection({
           alignItems: "flex-start",
           justifyContent: "space-between",
           flexWrap: "wrap",
-          gap: "10px",
+          gap: "12px",
           marginBottom: "16px",
         }}
       >
@@ -148,6 +172,53 @@ export function UnpaidSection({
           Các trận chưa đóng ({unpaidRecords.length})
         </h2>
 
+        {/* Banner Voucher Giảm Giá (nếu thành viên có) */}
+        {activeRewards.length > 0 && unpaidRecords.length > 0 && (
+          <div
+            style={{
+              width: "100%",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              padding: "10px 14px",
+              borderRadius: "10px",
+              background: "linear-gradient(135deg, rgba(234,179,8,0.12), rgba(15,23,42,0.8))",
+              border: "1px solid rgba(234,179,8,0.3)",
+              flexWrap: "wrap",
+              gap: "8px",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <span style={{ fontSize: "1.2rem" }}>🎟️</span>
+              <div>
+                <div style={{ fontSize: "0.82rem", fontWeight: 700, color: "#facc15" }}>
+                  {appliedReward ? `Đang áp dụng: ${appliedReward.label}` : `Có ${activeRewards.length} Voucher từ Vòng quay!`}
+                </div>
+                <div style={{ fontSize: "0.72rem", color: "var(--muted-foreground)" }}>
+                  {appliedReward ? `Được giảm -${formatCurrency(discountAmount)} khi quét mã QR` : "Bạn có thể áp dụng để giảm tiền sân trận này"}
+                </div>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setAppliedRewardId(appliedRewardId ? null : activeRewards[0].id)}
+              style={{
+                padding: "5px 12px",
+                borderRadius: "6px",
+                background: appliedRewardId ? "#22c55e" : "rgba(250,204,21,0.2)",
+                color: appliedRewardId ? "#ffffff" : "#fef08a",
+                border: "1px solid rgba(250,204,21,0.4)",
+                fontSize: "0.75rem",
+                fontWeight: 700,
+                cursor: "pointer",
+              }}
+            >
+              {appliedRewardId ? "✓ Bỏ áp dụng" : "Dùng Voucher"}
+            </button>
+          </div>
+        )}
+
         {/* Nút Tạo QR — full-width trên mobile */}
         {unpaidRecords.length > 0 && (
           <div style={{ width: "100%" }}>
@@ -156,7 +227,8 @@ export function UnpaidSection({
               memberCode={memberCode}
               memberName={memberName}
               selectedRecordIds={Array.from(selectedIds)}
-              selectedTotalAmount={selectedTotal}
+              selectedTotalAmount={finalTotalAmount}
+              rewardId={appliedRewardId}
             />
           </div>
         )}

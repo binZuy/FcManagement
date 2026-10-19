@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
-import { Settings, History, RotateCcw, Volume2, VolumeX } from "lucide-react";
+import { useState, useEffect, useRef, useCallback } from "react";
+import Link from "next/link";
+import { Settings, History, RotateCcw, Volume2, VolumeX, CheckCircle, AlertTriangle, Gift, ArrowRight, Sparkles } from "lucide-react";
 import { showToast } from "@/components/Toast";
 import { formatCurrency } from "@/lib/utils";
 
-interface WheelOption {
+export interface WheelOption {
   id: string;
   label: string;
   icon: string;
@@ -13,14 +14,40 @@ interface WheelOption {
   weight: number; // Tỉ lệ % trúng ảo
 }
 
-interface SpinHistoryItem {
+export interface WheelMember {
   id: string;
   name: string;
-  prize: string;
-  timestamp: string;
+  code: string;
+  image?: string | null;
+  jerseyNumber?: number | null;
+  unpaidCount: number;
+  totalDebt: number;
+  spinsAvailable: number;
+  canSpin: boolean;
+  rewards: Array<{
+    id: string;
+    prizeId: string;
+    label: string;
+    icon: string;
+    discountAmount: number;
+    isFreeMatch: boolean;
+    isFreeDrink: boolean;
+    createdAt: string;
+  }>;
 }
 
-const DEFAULT_OPTIONS: WheelOption[] = [
+export interface SpinHistoryItem {
+  id: string;
+  name: string;
+  image?: string | null;
+  prize: string;
+  prizeId: string;
+  discountAmount?: number;
+  isFreeMatch?: boolean;
+  createdAt: string;
+}
+
+export const DEFAULT_OPTIONS: WheelOption[] = [
   { id: "1", label: "Được cùng đội với binzuy", icon: "👑", color: "#3b82f6", weight: 35 },
   { id: "2", label: "Được mời nước Duy", icon: "☕", color: "#8b5cf6", weight: 20 },
   { id: "3", label: "Đen thế lần sau nhé", icon: "😂", color: "#64748b", weight: 35 },
@@ -34,15 +61,19 @@ interface LuckyWheelClientProps {
     name?: string | null;
     role: string;
   } | null;
-  totalPoolAmount: number;
+  loggedInMemberId?: string | null;
 }
 
-export function LuckyWheelClient({ currentUser, totalPoolAmount }: LuckyWheelClientProps) {
+export function LuckyWheelClient({ currentUser, loggedInMemberId }: LuckyWheelClientProps) {
   const isAdmin = currentUser?.role === "ADMIN";
 
   const [activeTab, setActiveTab] = useState<"wheel" | "settings">("wheel");
-  const [userName, setUserName] = useState<string>(currentUser?.name || "");
   const [soundEnabled, setSoundEnabled] = useState<boolean>(true);
+
+  // Danh sách thành viên FC từ API
+  const [members, setMembers] = useState<WheelMember[]>([]);
+  const [selectedMemberId, setSelectedMemberId] = useState<string>("");
+  const [isLoadingMembers, setIsLoadingMembers] = useState<boolean>(true);
 
   // Cấu hình 6 options gốc
   const [baseOptions, setBaseOptions] = useState<WheelOption[]>(DEFAULT_OPTIONS);
@@ -60,8 +91,52 @@ export function LuckyWheelClient({ currentUser, totalPoolAmount }: LuckyWheelCli
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const audioCtxRef = useRef<AudioContext | null>(null);
 
-  // Load state từ localStorage
+  // Lấy dữ liệu thành viên từ API
+  const fetchMembers = useCallback(async () => {
+    try {
+      setIsLoadingMembers(true);
+      const res = await fetch("/api/wheel/members");
+      const data = await res.json();
+      if (data.success && Array.isArray(data.members)) {
+        setMembers(data.members);
+        // Chọn thành viên mặc định
+        setSelectedMemberId((prev) => {
+          if (prev) return prev;
+          if (loggedInMemberId) {
+            const found = data.members.find((m: WheelMember) => m.id === loggedInMemberId);
+            if (found) return found.id;
+          }
+          const savedId = typeof window !== "undefined" ? localStorage.getItem("fc_selected_member_id") : null;
+          if (savedId && data.members.some((m: WheelMember) => m.id === savedId)) {
+            return savedId;
+          }
+          return data.members[0]?.id || "";
+        });
+      }
+    } catch (e) {
+      console.error("Lỗi tải danh sách thành viên:", e);
+    } finally {
+      setIsLoadingMembers(false);
+    }
+  }, [loggedInMemberId]);
+
+  // Lấy lịch sử quay công khai
+  const fetchHistory = useCallback(async () => {
+    try {
+      const res = await fetch("/api/wheel/spin");
+      const data = await res.json();
+      if (data.success && Array.isArray(data.history)) {
+        setHistory(data.history);
+      }
+    } catch (e) {
+      console.error("Lỗi tải lịch sử quay:", e);
+    }
+  }, []);
+
   useEffect(() => {
+    fetchMembers();
+    fetchHistory();
+
     // Load options (v3)
     const savedOptions = localStorage.getItem("fc_wheel_options_v3");
     if (savedOptions) {
@@ -71,25 +146,18 @@ export function LuckyWheelClient({ currentUser, totalPoolAmount }: LuckyWheelCli
         console.error(e);
       }
     }
+  }, [fetchMembers, fetchHistory]);
 
-    // Load user name nếu chưa có
-    if (!currentUser?.name) {
-      const savedName = localStorage.getItem("fc_guest_name");
-      if (savedName) setUserName(savedName);
+  const handleSelectMember = (memberId: string) => {
+    setSelectedMemberId(memberId);
+    if (typeof window !== "undefined") {
+      localStorage.setItem("fc_selected_member_id", memberId);
     }
+  };
 
-    // Load history
-    const savedHistory = localStorage.getItem("fc_wheel_history");
-    if (savedHistory) {
-      try {
-        setHistory(JSON.parse(savedHistory));
-      } catch (e) {
-        console.error(e);
-      }
-    }
-  }, [currentUser]);
+  const selectedMember = members.find((m) => m.id === selectedMemberId);
 
-  // Âm thanh Web Audio API (Tạo tiếng tick kim quay như Streamer)
+  // Âm thanh Web Audio API
   const playTickSound = () => {
     if (!soundEnabled || typeof window === "undefined") return;
     try {
@@ -105,17 +173,13 @@ export function LuckyWheelClient({ currentUser, totalPoolAmount }: LuckyWheelCli
 
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
-
       osc.type = "sine";
-      osc.frequency.setValueAtTime(800, ctx.currentTime);
-      osc.frequency.exponentialRampToValueAtTime(100, ctx.currentTime + 0.05);
-
-      gain.gain.setValueAtTime(0.3, ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.05);
-
+      osc.frequency.setValueAtTime(700, ctx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(150, ctx.currentTime + 0.04);
+      gain.gain.setValueAtTime(0.2, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.04);
       osc.connect(gain);
       gain.connect(ctx.destination);
-
       osc.start();
       osc.stop(ctx.currentTime + 0.05);
     } catch (e) {}
@@ -173,7 +237,12 @@ export function LuckyWheelClient({ currentUser, totalPoolAmount }: LuckyWheelCli
     ctx.fillStyle = "#facc15";
     ctx.fill();
 
-    // Vẽ các múi
+    ctx.beginPath();
+    ctx.arc(center, center, radius + 3, 0, 2 * Math.PI);
+    ctx.fillStyle = "#0f172a";
+    ctx.fill();
+
+    // Vẽ 12 ô màu xen kẽ
     wheelSlices.forEach((slice, i) => {
       const startAngle = i * sliceAngle;
       const endAngle = startAngle + sliceAngle;
@@ -182,39 +251,46 @@ export function LuckyWheelClient({ currentUser, totalPoolAmount }: LuckyWheelCli
       ctx.moveTo(center, center);
       ctx.arc(center, center, radius, startAngle, endAngle);
       ctx.closePath();
+
       ctx.fillStyle = slice.color;
       ctx.fill();
 
-      // Viền múi
-      ctx.strokeStyle = "rgba(255,255,255,0.25)";
-      ctx.lineWidth = 2;
+      ctx.lineWidth = 1.5;
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.25)";
       ctx.stroke();
 
-      // Vẽ text & icon
+      // Vẽ chữ & Icon
       ctx.save();
       ctx.translate(center, center);
       ctx.rotate(startAngle + sliceAngle / 2);
       ctx.textAlign = "right";
       ctx.fillStyle = "#ffffff";
-      ctx.font = "bold 13px system-ui, sans-serif";
+      ctx.font = "bold 11px system-ui, -apple-system, sans-serif";
       ctx.shadowColor = "rgba(0,0,0,0.8)";
       ctx.shadowBlur = 4;
 
-      ctx.fillText(`${slice.icon} ${slice.label}`, radius - 20, 5);
+      const labelText = slice.label.length > 15 ? slice.label.slice(0, 13) + ".." : slice.label;
+      ctx.fillText(`${slice.icon} ${labelText}`, radius - 14, 4);
+
       ctx.restore();
     });
 
-    // Vẽ tâm vòng quay
+    // Vẽ tâm vòng quay (Hub)
     ctx.beginPath();
-    ctx.arc(center, center, 32, 0, 2 * Math.PI);
+    ctx.arc(center, center, 28, 0, 2 * Math.PI);
     ctx.fillStyle = "#0f172a";
     ctx.fill();
-    ctx.lineWidth = 4;
+    ctx.lineWidth = 3;
     ctx.strokeStyle = "#facc15";
     ctx.stroke();
 
-    ctx.fillStyle = "#facc15";
-    ctx.font = "bold 12px sans-serif";
+    ctx.beginPath();
+    ctx.arc(center, center, 14, 0, 2 * Math.PI);
+    ctx.fillStyle = "#eab308";
+    ctx.fill();
+
+    ctx.fillStyle = "#0f172a";
+    ctx.font = "bold 10px sans-serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.fillText("SPIN", center, center);
@@ -233,17 +309,23 @@ export function LuckyWheelClient({ currentUser, totalPoolAmount }: LuckyWheelCli
     }
   }, [baseOptions, wheelSlices]);
 
-  // Thuật toán quay theo Tỉ lệ ảo (Weighted Probability)
-  const handleSpin = () => {
+  // Thuật toán quay theo Tỉ lệ ảo
+  const handleSpin = async () => {
     if (isSpinning) return;
-    const trimmedName = userName.trim();
-    if (!trimmedName) {
-      showToast.error("Vui lòng nhập tên của bạn trước khi quay!");
+
+    if (!selectedMember) {
+      showToast.error("Vui lòng chọn thành viên FC trước khi quay!");
       return;
     }
 
-    if (!currentUser?.name) {
-      localStorage.setItem("fc_guest_name", trimmedName);
+    if (selectedMember.unpaidCount > 0) {
+      showToast.error(`Thành viên này còn nợ ${selectedMember.unpaidCount} trận. Phải thanh toán hết bill mới được quay!`);
+      return;
+    }
+
+    if (selectedMember.spinsAvailable <= 0) {
+      showToast.error("Bạn đã hết lượt quay! Hãy đá trận tiếp theo và thanh toán đủ để nhận thêm lượt nhé!");
+      return;
     }
 
     // Chọn giải thưởng theo tỉ lệ %
@@ -259,7 +341,7 @@ export function LuckyWheelClient({ currentUser, totalPoolAmount }: LuckyWheelCli
       randomNum -= opt.weight;
     }
 
-    // Tìm vị trí của chosenOption trên 12 ô (chọn ngẫu nhiên 1 trong 2 ô tương ứng)
+    // Tìm vị trí của chosenOption trên 12 ô
     const matchingIndices: number[] = [];
     wheelSlices.forEach((slice, idx) => {
       if (slice.id === chosenOption.id) matchingIndices.push(idx);
@@ -276,7 +358,7 @@ export function LuckyWheelClient({ currentUser, totalPoolAmount }: LuckyWheelCli
     setWinningPrize(null);
     setRotation(finalAngle);
 
-    // Giả lập âm thanh tick...tick khi kim quét
+    // Âm thanh tick...tick khi kim quét
     let tickCount = 0;
     const tickInterval = setInterval(() => {
       tickCount++;
@@ -285,23 +367,46 @@ export function LuckyWheelClient({ currentUser, totalPoolAmount }: LuckyWheelCli
     }, 120);
 
     // Kết thúc vòng quay (sau 4.5 giây)
-    setTimeout(() => {
+    setTimeout(async () => {
       setIsSpinning(false);
       setWinningPrize(chosenOption);
       setShowWinnerModal(true);
       playFanfareSound();
 
-      // Lưu lịch sử
-      const newHistoryItem: SpinHistoryItem = {
-        id: Date.now().toString(),
-        name: trimmedName,
-        prize: `${chosenOption.icon} ${chosenOption.label}`,
-        timestamp: new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }),
-      };
+      // Gửi API trừ lượt quay & lưu voucher thưởng vào DB
+      try {
+        const res = await fetch("/api/wheel/spin", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            memberId: selectedMember.id,
+            prizeId: chosenOption.id,
+            label: chosenOption.label,
+            icon: chosenOption.icon,
+          }),
+        });
 
-      const updatedHistory = [newHistoryItem, ...history.slice(0, 19)];
-      setHistory(updatedHistory);
-      localStorage.setItem("fc_wheel_history", JSON.stringify(updatedHistory));
+        const data = await res.json();
+        if (data.success) {
+          // Cập nhật số lượt quay của member local
+          setMembers((prev) =>
+            prev.map((m) =>
+              m.id === selectedMember.id
+                ? {
+                    ...m,
+                    spinsAvailable: data.spinsRemaining,
+                    rewards: [data.reward, ...m.rewards],
+                  }
+                : m
+            )
+          );
+          fetchHistory();
+        } else {
+          showToast.error(data.error || "Lỗi khi lưu kết quả quay");
+        }
+      } catch (err) {
+        console.error("Lỗi gọi API quay:", err);
+      }
     }, 4500);
   };
 
@@ -327,7 +432,7 @@ export function LuckyWheelClient({ currentUser, totalPoolAmount }: LuckyWheelCli
   };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "20px", maxWidth: "860px", margin: "0 auto" }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: "20px", maxWidth: "880px", margin: "0 auto" }}>
       {/* Header */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "10px" }}>
         <div>
@@ -335,7 +440,7 @@ export function LuckyWheelClient({ currentUser, totalPoolAmount }: LuckyWheelCli
             Vòng Quay May Mắn 🎡✨
           </h1>
           <p style={{ fontSize: "0.82rem", color: "var(--muted-foreground)" }}>
-            Quay thưởng giải trí cho anh em FC · Nộp sớm có quà, nộp trễ góp quỹ!
+            Thanh toán sạch nợ nhận ngay 1 lượt quay · Cơ hội nhận Voucher 5k & Free sân!
           </p>
         </div>
 
@@ -380,7 +485,7 @@ export function LuckyWheelClient({ currentUser, totalPoolAmount }: LuckyWheelCli
                 cursor: "pointer",
                 display: "flex",
                 alignItems: "center",
-                gap: "4px"
+                gap: "4px",
               }}
             >
               <Settings size={14} /> Cài Đặt {isAdmin && "(Admin)"}
@@ -392,7 +497,7 @@ export function LuckyWheelClient({ currentUser, totalPoolAmount }: LuckyWheelCli
       {/* TAB 1: MÀN HÌNH QUAY THƯỞNG */}
       {activeTab === "wheel" && (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: "20px", alignItems: "start" }}>
-          {/* Cột trái: Vòng quay đồ họa */}
+          {/* Cột trái: Vòng quay đồ họa & Selector */}
           <div
             className="glass-card"
             style={{
@@ -406,7 +511,7 @@ export function LuckyWheelClient({ currentUser, totalPoolAmount }: LuckyWheelCli
               background: "radial-gradient(circle, rgba(30,41,59,0.8) 0%, rgba(15,23,42,0.95) 100%)",
               border: "1px solid rgba(250,204,21,0.3)",
               boxShadow: "0 10px 40px rgba(0,0,0,0.5)",
-              overflow: "hidden"
+              overflow: "hidden",
             }}
           >
             {/* Kim chỉ (Pointer) ở góc 12h */}
@@ -431,110 +536,178 @@ export function LuckyWheelClient({ currentUser, totalPoolAmount }: LuckyWheelCli
                 width: "12px",
                 height: "12px",
                 borderRadius: "50%",
-                background: "#facc15",
-                boxShadow: "0 0 8px #facc15",
+                background: "#fef08a",
+                border: "2px solid #ef4444",
               }}
             />
 
-            {/* Canvas Vòng Quay */}
-            <div
-              style={{
-                transform: `rotate(${rotation}deg)`,
-                transition: isSpinning ? "transform 4.5s cubic-bezier(0.15, 0.95, 0.35, 1)" : "none",
-                display: "inline-block",
-                padding: "8px",
-              }}
-            >
+            {/* Canvas Wheel */}
+            <div style={{ width: "300px", height: "300px", position: "relative", marginTop: "12px" }}>
               <canvas
                 ref={canvasRef}
-                width={330}
-                height={330}
+                width={300}
+                height={300}
                 style={{
-                  maxWidth: "100%",
-                  height: "auto",
+                  width: "100%",
+                  height: "100%",
                   borderRadius: "50%",
-                  boxShadow: "0 0 25px rgba(250,204,21,0.25)",
+                  transform: `rotate(${rotation}deg)`,
+                  transition: isSpinning ? "transform 4.5s cubic-bezier(0.15, 0.95, 0.35, 1)" : "none",
                 }}
               />
             </div>
 
-            {/* Input tên & Nút quay */}
-            <div style={{ marginTop: "20px", width: "100%", maxWidth: "280px", display: "flex", flexDirection: "column", gap: "10px" }}>
+            {/* Chọn Thành Viên FC Nhận Thưởng */}
+            <div style={{ marginTop: "22px", width: "100%", maxWidth: "320px", display: "flex", flexDirection: "column", gap: "10px" }}>
               <div>
-                <label style={{ display: "block", fontSize: "0.75rem", fontWeight: 700, color: "var(--muted-foreground)", marginBottom: "4px" }}>
-                  Người quay:
+                <label style={{ display: "block", fontSize: "0.78rem", fontWeight: 700, color: "#facc15", marginBottom: "4px" }}>
+                  👤 Chọn thành viên nhận thưởng:
                 </label>
-                <input
-                  type="text"
-                  value={userName}
-                  onChange={(e) => setUserName(e.target.value)}
-                  placeholder="Nhập tên của bạn..."
-                  disabled={isSpinning}
+                <select
+                  value={selectedMemberId}
+                  onChange={(e) => handleSelectMember(e.target.value)}
+                  disabled={isSpinning || isLoadingMembers}
+                  className="form-input"
                   style={{
                     width: "100%",
-                    padding: "8px 12px",
+                    padding: "9px 12px",
                     borderRadius: "8px",
-                    background: "rgba(0,0,0,0.3)",
-                    border: "1px solid var(--border)",
-                    color: "var(--card-foreground)",
+                    background: "#0f172a",
+                    borderColor: selectedMember?.unpaidCount === 0 ? "#4ade80" : "var(--border)",
+                    color: "white",
                     fontSize: "0.85rem",
                     fontWeight: 700,
                   }}
-                />
+                >
+                  {isLoadingMembers && <option value="">Đang tải danh sách thành viên...</option>}
+                  {!isLoadingMembers && members.length === 0 && <option value="">Chưa có thành viên nào</option>}
+                  {members.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.name} {m.jerseyNumber ? `(#${m.jerseyNumber})` : ""} - {m.unpaidCount > 0 ? `⚠️ Nợ ${m.unpaidCount} trận` : `✅ Đủ điều kiện (${m.spinsAvailable} lượt)`}
+                    </option>
+                  ))}
+                </select>
               </div>
 
+              {/* Thông báo điều kiện thanh toán */}
+              {selectedMember && (
+                <div style={{ fontSize: "0.76rem", borderRadius: "8px", padding: "8px 10px", lineHeight: 1.4 }}>
+                  {selectedMember.unpaidCount > 0 ? (
+                    <div style={{ background: "rgba(239,68,68,0.12)", border: "1px solid rgba(239,68,68,0.3)", borderRadius: "6px", padding: "8px", color: "#f87171" }}>
+                      <div style={{ fontWeight: 800, display: "flex", alignItems: "center", gap: "4px", marginBottom: "2px" }}>
+                        <AlertTriangle size={14} color="#f87171" /> Còn nợ {selectedMember.unpaidCount} trận ({formatCurrency(selectedMember.totalDebt)})
+                      </div>
+                      <div>Cần thanh toán sạch toàn bộ bill để nhận 1 lượt quay nhé!</div>
+                      <Link
+                        href={`/payments/${selectedMember.id}`}
+                        style={{ display: "inline-flex", alignItems: "center", gap: "4px", color: "#facc15", fontWeight: 700, marginTop: "4px", textDecoration: "none" }}
+                      >
+                        Thanh toán ngay <ArrowRight size={12} />
+                      </Link>
+                    </div>
+                  ) : selectedMember.spinsAvailable > 0 ? (
+                    <div style={{ background: "rgba(34,197,94,0.12)", border: "1px solid rgba(34,197,94,0.3)", borderRadius: "6px", padding: "8px", color: "#4ade80" }}>
+                      <div style={{ fontWeight: 800, display: "flex", alignItems: "center", gap: "4px" }}>
+                        <CheckCircle size={14} color="#4ade80" /> Đã sạch nợ · Có {selectedMember.spinsAvailable} lượt quay khả dụng 🎟️
+                      </div>
+                    </div>
+                  ) : (
+                    <div style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "6px", padding: "8px", color: "var(--muted-foreground)" }}>
+                      <div>💡 Đã sạch nợ nhưng đã dùng hết lượt quay. Hãy tham gia trận sau và đóng đủ để nhận thêm lượt!</div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Nút Quay */}
               <button
                 type="button"
                 onClick={handleSpin}
-                disabled={isSpinning}
+                disabled={isSpinning || !selectedMember || selectedMember.unpaidCount > 0 || selectedMember.spinsAvailable <= 0}
                 className="btn btn-primary"
                 style={{
                   padding: "12px",
-                  fontSize: "1.05rem",
+                  fontSize: "1rem",
                   fontWeight: 900,
                   borderRadius: "10px",
-                  background: isSpinning
-                    ? "rgba(255,255,255,0.1)"
-                    : "linear-gradient(135deg, #facc15, #eab308)",
-                  color: "#0f172a",
-                  boxShadow: isSpinning ? "none" : "0 4px 20px rgba(234,179,8,0.4)",
+                  background:
+                    isSpinning || !selectedMember || selectedMember.unpaidCount > 0 || selectedMember.spinsAvailable <= 0
+                      ? "rgba(255,255,255,0.08)"
+                      : "linear-gradient(135deg, #facc15, #eab308)",
+                  color: isSpinning || !selectedMember || selectedMember.unpaidCount > 0 || selectedMember.spinsAvailable <= 0 ? "var(--muted-foreground)" : "#0f172a",
+                  boxShadow:
+                    isSpinning || !selectedMember || selectedMember.unpaidCount > 0 || selectedMember.spinsAvailable <= 0
+                      ? "none"
+                      : "0 4px 20px rgba(234,179,8,0.4)",
                   border: "none",
-                  cursor: isSpinning ? "not-allowed" : "pointer",
+                  cursor: isSpinning || !selectedMember || selectedMember.unpaidCount > 0 || selectedMember.spinsAvailable <= 0 ? "not-allowed" : "pointer",
                 }}
               >
-                {isSpinning ? "ĐANG QUAY..." : "🎰 QUAY NGAY"}
+                {isSpinning
+                  ? "ĐANG QUAY..."
+                  : selectedMember?.unpaidCount && selectedMember.unpaidCount > 0
+                  ? "CÒN NỢ BILL - CHƯA ĐƯỢC QUAY"
+                  : selectedMember?.spinsAvailable && selectedMember.spinsAvailable > 0
+                  ? `🎰 QUAY NGAY (${selectedMember.spinsAvailable} lượt)`
+                  : "HẾT LƯỢT QUAY"}
               </button>
             </div>
           </div>
 
-          {/* Cột phải: Thông tin Quỹ + Lịch sử quay */}
+          {/* Cột phải: Kho Voucher của Thành viên & Lịch sử quay toàn đội */}
           <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-            {/* Card Quỹ Thưởng */}
-            <div
-              className="glass-card"
-              style={{
-                padding: "16px",
-                borderRadius: "14px",
-                background: "linear-gradient(135deg, rgba(234,179,8,0.12), rgba(15,23,42,0.85))",
-                border: "1px solid rgba(234,179,8,0.3)",
-              }}
-            >
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <div>
-                  <div style={{ fontSize: "0.8rem", fontWeight: 700, color: "#facc15" }}>
-                    🎁 Quỹ thưởng
-                  </div>
-                  <div style={{ fontSize: "1.4rem", fontWeight: 900, color: "#fef08a", marginTop: "2px" }}>
-                    {formatCurrency(totalPoolAmount)}
-                  </div>
+            {/* Kho Voucher & Quà của Thành Viên Đang Chọn */}
+            {selectedMember && (
+              <div
+                className="glass-card"
+                style={{
+                  padding: "16px",
+                  borderRadius: "14px",
+                  background: "linear-gradient(135deg, rgba(34,197,94,0.08), rgba(15,23,42,0.8))",
+                  border: "1px solid rgba(34,197,94,0.25)",
+                }}
+              >
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
+                  <span style={{ fontSize: "0.85rem", fontWeight: 800, color: "var(--card-foreground)", display: "flex", alignItems: "center", gap: "6px" }}>
+                    <Gift size={16} color="#4ade80" /> Kho Quà & Voucher: {selectedMember.name}
+                  </span>
+                  <span style={{ fontSize: "0.72rem", background: "rgba(34,197,94,0.15)", color: "#4ade80", padding: "2px 8px", borderRadius: "999px", fontWeight: 700 }}>
+                    {selectedMember.rewards?.length || 0} phần thưởng
+                  </span>
                 </div>
-                <div style={{ width: 40, height: 40, borderRadius: 10, background: "rgba(250,204,21,0.2)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.3rem" }}>
-                  💰
+
+                <div style={{ display: "flex", flexDirection: "column", gap: "6px", maxHeight: "160px", overflowY: "auto" }}>
+                  {selectedMember.rewards && selectedMember.rewards.length > 0 ? (
+                    selectedMember.rewards.map((rw) => (
+                      <div
+                        key={rw.id}
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                          padding: "6px 10px",
+                          borderRadius: "6px",
+                          background: "rgba(255,255,255,0.03)",
+                          border: "1px solid rgba(255,255,255,0.06)",
+                        }}
+                      >
+                        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                          <span>{rw.icon}</span>
+                          <span style={{ fontSize: "0.8rem", fontWeight: 700, color: "#f8fafc" }}>{rw.label}</span>
+                        </div>
+                        <span style={{ fontSize: "0.68rem", color: "#4ade80", fontWeight: 700 }}>Khả dụng</span>
+                      </div>
+                    ))
+                  ) : (
+                    <div style={{ fontSize: "0.75rem", color: "var(--muted-foreground)", textAlign: "center", padding: "12px 0" }}>
+                      Chưa có voucher nào. Hãy quay thưởng để trúng Discount 5k & Free sân!
+                    </div>
+                  )}
                 </div>
               </div>
-            </div>
+            )}
 
-            {/* Bảng Lịch sử quay */}
+            {/* Bảng Lịch sử quay FC (Toàn đội) */}
             <div
               className="glass-card"
               style={{
@@ -549,19 +722,6 @@ export function LuckyWheelClient({ currentUser, totalPoolAmount }: LuckyWheelCli
                 <span style={{ fontSize: "0.85rem", fontWeight: 800, color: "var(--card-foreground)", display: "flex", alignItems: "center", gap: "6px" }}>
                   <History size={15} color="var(--primary)" /> Lịch Sử Quay Gần Đây ({history.length})
                 </span>
-                {history.length > 0 && (
-                  <button
-                    onClick={() => {
-                      if (confirm("Xóa lịch sử quay?")) {
-                        setHistory([]);
-                        localStorage.removeItem("fc_wheel_history");
-                      }
-                    }}
-                    style={{ background: "transparent", border: "none", color: "var(--muted-foreground)", fontSize: "0.7rem", cursor: "pointer" }}
-                  >
-                    Xóa
-                  </button>
-                )}
               </div>
 
               <div style={{ display: "flex", flexDirection: "column", gap: "8px", maxHeight: "280px", overflowY: "auto" }}>
@@ -583,7 +743,7 @@ export function LuckyWheelClient({ currentUser, totalPoolAmount }: LuckyWheelCli
                         {item.name}
                       </div>
                       <div style={{ fontSize: "0.68rem", color: "var(--muted-foreground)" }}>
-                        {item.timestamp}
+                        {new Date(item.createdAt).toLocaleDateString("vi-VN", { hour: "2-digit", minute: "2-digit" })}
                       </div>
                     </div>
                     <span style={{ fontSize: "0.78rem", fontWeight: 700, color: "#facc15", background: "rgba(250,204,21,0.12)", padding: "2px 8px", borderRadius: "6px" }}>
@@ -742,7 +902,7 @@ export function LuckyWheelClient({ currentUser, totalPoolAmount }: LuckyWheelCli
       )}
 
       {/* POPUP CHÚC MỪNG CHIẾN THẮNG (CONGRATS MODAL) */}
-      {showWinnerModal && winningPrize && (
+      {showWinnerModal && winningPrize && selectedMember && (
         <div
           onClick={() => setShowWinnerModal(false)}
           style={{
@@ -760,37 +920,49 @@ export function LuckyWheelClient({ currentUser, totalPoolAmount }: LuckyWheelCli
           <div
             onClick={(e) => e.stopPropagation()}
             style={{
-              background: "linear-gradient(145deg, #1e293b, #0f172a)",
+              background: "linear-gradient(135deg, #1e293b 0%, #0f172a 100%)",
               border: "2px solid #facc15",
               borderRadius: "20px",
-              padding: "28px",
+              padding: "32px 24px",
+              maxWidth: "400px",
               width: "100%",
-              maxWidth: "380px",
               textAlign: "center",
+              boxShadow: "0 20px 60px rgba(250,204,21,0.3)",
               display: "flex",
               flexDirection: "column",
               alignItems: "center",
               gap: "14px",
-              boxShadow: "0 0 50px rgba(250,204,21,0.4)",
-              animation: "zoomIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)",
+              position: "relative",
             }}
           >
-            <div style={{ fontSize: "3.5rem" }}>
-              {winningPrize.icon}
+            <div style={{ fontSize: "4.5rem", lineHeight: 1 }}>{winningPrize.icon}</div>
+
+            <div style={{ fontSize: "0.82rem", fontWeight: 800, color: "#facc15", textTransform: "uppercase", letterSpacing: "1px", display: "flex", alignItems: "center", gap: "4px" }}>
+              <Sparkles size={16} /> Kết Quả Quay Thưởng!
             </div>
 
-            <div>
-              <span style={{ fontSize: "0.75rem", fontWeight: 800, color: "#facc15", textTransform: "uppercase", letterSpacing: "1px" }}>
-                Chúc mừng {userName}! 🎉
-              </span>
-              <h2 style={{ fontSize: "1.5rem", fontWeight: 900, color: "#f8fafc", marginTop: "4px" }}>
-                {winningPrize.label}
-              </h2>
-            </div>
+            <h3 style={{ fontSize: "1.45rem", fontWeight: 900, color: "#ffffff" }}>
+              {winningPrize.label}
+            </h3>
 
-            <p style={{ fontSize: "0.82rem", color: "#cbd5e1" }}>
-              Chụp màn hình lại và thông báo với thủ quỹ ở trận tới để nhận phần quà này nhé! ⚽🔥
-            </p>
+            <div style={{ fontSize: "0.85rem", color: "var(--muted-foreground)", lineHeight: 1.5 }}>
+              Chúc mừng <strong>{selectedMember.name}</strong> đã trúng phần thưởng!
+              {winningPrize.id === "4" && (
+                <div style={{ marginTop: "6px", color: "#4ade80", fontWeight: 700 }}>
+                  🎟️ Voucher giảm 5.000đ đã được lưu vào tài khoản để trừ tiền sân trận sau!
+                </div>
+              )}
+              {winningPrize.id === "6" && (
+                <div style={{ marginTop: "6px", color: "#ef4444", fontWeight: 700 }}>
+                  🎰 JACKPOT! Bạn được miễn phí 100% tiền sân trận tiếp theo!
+                </div>
+              )}
+              {winningPrize.id === "5" && (
+                <div style={{ marginTop: "6px", color: "#f59e0b", fontWeight: 700 }}>
+                  🥤 Trận sau nhớ tìm Duy để được mời nước nhé!
+                </div>
+              )}
+            </div>
 
             <button
               type="button"
@@ -798,11 +970,14 @@ export function LuckyWheelClient({ currentUser, totalPoolAmount }: LuckyWheelCli
               className="btn btn-primary"
               style={{
                 marginTop: "10px",
-                width: "100%",
-                padding: "10px",
-                fontWeight: 800,
+                padding: "10px 28px",
                 fontSize: "0.95rem",
+                fontWeight: 800,
                 borderRadius: "10px",
+                background: "linear-gradient(135deg, #facc15, #eab308)",
+                color: "#0f172a",
+                border: "none",
+                cursor: "pointer",
               }}
             >
               Nhận Quà & Đóng

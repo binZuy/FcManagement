@@ -20,6 +20,7 @@ interface QRPaymentDialogProps {
   memberName: string;
   selectedRecordIds: string[];
   selectedTotalAmount: number;
+  rewardId?: string | null;
 }
 
 type DialogStep = "qr" | "success";
@@ -72,6 +73,7 @@ export function QRPaymentDialog({
   memberName,
   selectedRecordIds,
   selectedTotalAmount,
+  rewardId,
 }: QRPaymentDialogProps) {
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState<DialogStep>("qr");
@@ -210,7 +212,7 @@ export function QRPaymentDialog({
       const res = await fetch("/api/payments/bundles", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ memberId, recordIds: selectedRecordIds }),
+        body: JSON.stringify({ memberId, recordIds: selectedRecordIds, rewardId: rewardId || undefined }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Có lỗi xảy ra khi tạo QR");
@@ -353,25 +355,26 @@ const BANK_APP_MAP: Record<string, string> = {
         style={{
           display: "inline-flex",
           alignItems: "center",
+          justifyContent: "center",
           gap: "8px",
-          padding: "10px 20px",
+          width: "100%",
+          padding: "11px 18px",
           background: selectedRecordIds.length === 0
-            ? "rgba(34,197,94,0.12)"
+            ? "rgba(255,255,255,0.06)"
             : "linear-gradient(135deg, #16a34a, #22c55e)",
           color: selectedRecordIds.length === 0 ? "var(--muted-foreground)" : "white",
           border: "none",
           borderRadius: "10px",
-          fontSize: "0.88rem",
-          fontWeight: 700,
+          fontSize: "0.9rem",
+          fontWeight: 800,
           cursor: selectedRecordIds.length === 0 ? "not-allowed" : "pointer",
           transition: "all 0.2s",
           boxShadow: selectedRecordIds.length > 0 ? "0 4px 15px rgba(34,197,94,0.3)" : "none",
-          whiteSpace: "nowrap",
         }}
       >
-        <Zap size={15} />
+        <QrCode size={18} />
         {selectedRecordIds.length > 0
-          ? `Tạo QR (${formatCurrency(selectedTotalAmount)})`
+          ? `Tạo VietQR (${formatCurrency(selectedTotalAmount)})`
           : "Chọn trận cần đóng"}
       </button>
 
