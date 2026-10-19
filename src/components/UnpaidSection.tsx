@@ -264,7 +264,7 @@ export function UnpaidSection({
                 fontWeight: 600,
               }}
             >
-              Chọn tất cả
+              Tất cả
             </button>
             <button
               onClick={clearAll}
@@ -311,8 +311,8 @@ export function UnpaidSection({
                 {isBulkLoading
                   ? "Đang xử lý..."
                   : isBulkConfirming
-                  ? `Xác nhận thu ${selectedIds.size} khoản?`
-                  : `Thu tiền ${selectedIds.size} khoản đã chọn`}
+                  ? `Xác nhận thu ${selectedIds.size}?`
+                  : `Đã chọn ${selectedIds.size}`}
               </button>
             )}
           </div>

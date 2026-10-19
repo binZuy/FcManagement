@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import Link from "next/link";
-import { Settings, History, RotateCcw, Volume2, VolumeX, CheckCircle, AlertTriangle, Gift, ArrowRight, Sparkles } from "lucide-react";
+import { Settings, History, RotateCcw, Volume2, VolumeX, CheckCircle, AlertTriangle, Gift, ArrowRight, Sparkles, Plus, Trash2 } from "lucide-react";
 import { showToast } from "@/components/Toast";
 import { formatCurrency } from "@/lib/utils";
 
@@ -75,11 +75,11 @@ export function LuckyWheelClient({ currentUser, loggedInMemberId }: LuckyWheelCl
   const [selectedMemberId, setSelectedMemberId] = useState<string>("");
   const [isLoadingMembers, setIsLoadingMembers] = useState<boolean>(true);
 
-  // Cấu hình 6 options gốc
+  // Cấu hình options gốc
   const [baseOptions, setBaseOptions] = useState<WheelOption[]>(DEFAULT_OPTIONS);
 
-  // Vòng quay 12 ô (6 options x 2 vòng)
-  const wheelSlices = [...baseOptions, ...baseOptions];
+  // Vòng quay linh hoạt: nếu <= 6 ô thì nhân đôi thành 2N ô đối xứng, nếu > 6 ô thì hiển thị N ô
+  const wheelSlices = baseOptions.length <= 6 ? [...baseOptions, ...baseOptions] : [...baseOptions];
 
   // Trạng thái quay
   const [isSpinning, setIsSpinning] = useState<boolean>(false);
@@ -319,7 +319,7 @@ export function LuckyWheelClient({ currentUser, loggedInMemberId }: LuckyWheelCl
     }
 
     if (selectedMember.unpaidCount > 0) {
-      showToast.error(`Thành viên này còn nợ ${selectedMember.unpaidCount} trận. Phải thanh toán hết bill mới được quay!`);
+      showToast.error(`Thành viên này còn ${selectedMember.unpaidCount} trận chưa đóng. Phải thanh toán hết bill mới được quay!`);
       return;
     }
 
@@ -423,6 +423,33 @@ export function LuckyWheelClient({ currentUser, loggedInMemberId }: LuckyWheelCl
     showToast.success("Đã khôi phục thiết lập mặc định!");
   };
 
+  const handleAddOption = () => {
+    if (baseOptions.length >= 16) {
+      showToast.error("Tối đa 16 phần thưởng trên vòng quay!");
+      return;
+    }
+    const colors = ["#3b82f6", "#8b5cf6", "#ec4899", "#10b981", "#f59e0b", "#ef4444", "#06b6d4", "#84cc16"];
+    const randomColor = colors[baseOptions.length % colors.length];
+    const newOpt: WheelOption = {
+      id: Date.now().toString(),
+      label: `Phần thưởng ${baseOptions.length + 1}`,
+      icon: "🎁",
+      color: randomColor,
+      weight: 5,
+    };
+    setBaseOptions((prev) => [...prev, newOpt]);
+    showToast.success("Đã thêm 1 ô phần thưởng mới!");
+  };
+
+  const handleRemoveOption = (id: string) => {
+    if (baseOptions.length <= 3) {
+      showToast.error("Vòng quay cần tối thiểu 3 phần thưởng!");
+      return;
+    }
+    setBaseOptions((prev) => prev.filter((o) => o.id !== id));
+    showToast.info("Đã xóa 1 ô phần thưởng!");
+  };
+
   const updateOption = (index: number, field: keyof WheelOption, value: any) => {
     setBaseOptions((prev) => {
       const next = [...prev];
@@ -440,7 +467,7 @@ export function LuckyWheelClient({ currentUser, loggedInMemberId }: LuckyWheelCl
             Vòng Quay May Mắn 🎡✨
           </h1>
           <p style={{ fontSize: "0.82rem", color: "var(--muted-foreground)" }}>
-            Thanh toán sạch nợ nhận ngay 1 lượt quay · Cơ hội nhận Voucher 5k & Free sân!
+            Đóng đủ các trận nhận ngay 1 lượt quay · Cơ hội nhận Voucher 5k & Free sân!
           </p>
         </div>
 
@@ -583,7 +610,7 @@ export function LuckyWheelClient({ currentUser, loggedInMemberId }: LuckyWheelCl
                   {!isLoadingMembers && members.length === 0 && <option value="">Chưa có thành viên nào</option>}
                   {members.map((m) => (
                     <option key={m.id} value={m.id}>
-                      {m.name} {m.jerseyNumber ? `(#${m.jerseyNumber})` : ""} - {m.unpaidCount > 0 ? `⚠️ Nợ ${m.unpaidCount} trận` : `✅ Đủ điều kiện (${m.spinsAvailable} lượt)`}
+                      {m.name} {m.jerseyNumber ? `(#${m.jerseyNumber})` : ""} - {m.unpaidCount > 0 ? `${m.unpaidCount} trận` : `Đủ điều kiện (${m.spinsAvailable} lượt)`}
                     </option>
                   ))}
                 </select>
@@ -595,7 +622,7 @@ export function LuckyWheelClient({ currentUser, loggedInMemberId }: LuckyWheelCl
                   {selectedMember.unpaidCount > 0 ? (
                     <div style={{ background: "rgba(239,68,68,0.12)", border: "1px solid rgba(239,68,68,0.3)", borderRadius: "6px", padding: "8px", color: "#f87171" }}>
                       <div style={{ fontWeight: 800, display: "flex", alignItems: "center", gap: "4px", marginBottom: "2px" }}>
-                        <AlertTriangle size={14} color="#f87171" /> Còn nợ {selectedMember.unpaidCount} trận ({formatCurrency(selectedMember.totalDebt)})
+                        <AlertTriangle size={14} color="#f87171" /> {selectedMember.unpaidCount} trận chưa đóng ({formatCurrency(selectedMember.totalDebt)})
                       </div>
                       <div>Cần thanh toán sạch toàn bộ bill để nhận 1 lượt quay nhé!</div>
                       <Link
@@ -608,12 +635,12 @@ export function LuckyWheelClient({ currentUser, loggedInMemberId }: LuckyWheelCl
                   ) : selectedMember.spinsAvailable > 0 ? (
                     <div style={{ background: "rgba(34,197,94,0.12)", border: "1px solid rgba(34,197,94,0.3)", borderRadius: "6px", padding: "8px", color: "#4ade80" }}>
                       <div style={{ fontWeight: 800, display: "flex", alignItems: "center", gap: "4px" }}>
-                        <CheckCircle size={14} color="#4ade80" /> Đã sạch nợ · Có {selectedMember.spinsAvailable} lượt quay khả dụng 🎟️
+                        <CheckCircle size={14} color="#4ade80" /> Đã hoàn thành · Có {selectedMember.spinsAvailable} lượt quay khả dụng 🎟️
                       </div>
                     </div>
                   ) : (
                     <div style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "6px", padding: "8px", color: "var(--muted-foreground)" }}>
-                      <div>💡 Đã sạch nợ nhưng đã dùng hết lượt quay. Hãy tham gia trận sau và đóng đủ để nhận thêm lượt!</div>
+                      <div>💡 Đã hoàn thành nhưng đã dùng hết lượt quay. Hãy tham gia trận sau và đóng đủ để nhận thêm lượt!</div>
                     </div>
                   )}
                 </div>
@@ -646,7 +673,7 @@ export function LuckyWheelClient({ currentUser, loggedInMemberId }: LuckyWheelCl
                 {isSpinning
                   ? "ĐANG QUAY..."
                   : selectedMember?.unpaidCount && selectedMember.unpaidCount > 0
-                  ? "CÒN NỢ BILL - CHƯA ĐƯỢC QUAY"
+                  ? "CHƯA ĐÓNG ĐỦ - CHƯA ĐƯỢC QUAY"
                   : selectedMember?.spinsAvailable && selectedMember.spinsAvailable > 0
                   ? `🎰 QUAY NGAY (${selectedMember.spinsAvailable} lượt)`
                   : "HẾT LƯỢT QUAY"}
@@ -769,10 +796,10 @@ export function LuckyWheelClient({ currentUser, loggedInMemberId }: LuckyWheelCl
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "10px" }}>
             <div>
               <h2 style={{ fontSize: "1.1rem", fontWeight: 800, color: "var(--card-foreground)" }}>
-                ⚙️ Thiết Lập 6 Ô Phần Thưởng & Tỉ Lệ Trúng Ảo
+                ⚙️ Thiết Lập Phần Thưởng & Tỉ Lệ Trúng Vòng Quay
               </h2>
               <div style={{ fontSize: "0.75rem", color: "var(--muted-foreground)" }}>
-                6 phần thưởng sẽ được nhân đôi thành 12 ô trên vòng quay tròn đối xứng
+                Đang có {baseOptions.length} phần thưởng. Bạn có thể thêm ô mới, sửa tên, chỉnh màu, xóa hoặc tùy biến tỉ lệ % trúng.
               </div>
             </div>
 
@@ -796,15 +823,15 @@ export function LuckyWheelClient({ currentUser, loggedInMemberId }: LuckyWheelCl
             </div>
           </div>
 
-          {/* Danh sách 6 options */}
+          {/* Danh sách options */}
           <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
             {baseOptions.map((opt, idx) => (
               <div
                 key={opt.id}
                 style={{
                   display: "grid",
-                  gridTemplateColumns: "50px 1fr 90px 100px",
-                  gap: "10px",
+                  gridTemplateColumns: "45px 1fr 65px 75px 36px",
+                  gap: "8px",
                   alignItems: "center",
                   padding: "10px 12px",
                   borderRadius: "10px",
@@ -847,7 +874,7 @@ export function LuckyWheelClient({ currentUser, loggedInMemberId }: LuckyWheelCl
                 />
 
                 {/* Màu sắc */}
-                <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
                   <input
                     type="color"
                     value={opt.color}
@@ -866,7 +893,7 @@ export function LuckyWheelClient({ currentUser, loggedInMemberId }: LuckyWheelCl
 
                 {/* Tỉ lệ % trúng ảo */}
                 <div>
-                  <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "2px" }}>
                     <input
                       type="number"
                       min={0}
@@ -875,8 +902,8 @@ export function LuckyWheelClient({ currentUser, loggedInMemberId }: LuckyWheelCl
                       value={opt.weight}
                       onChange={(e) => updateOption(idx, "weight", parseFloat(e.target.value) || 0)}
                       style={{
-                        width: "60px",
-                        padding: "6px 8px",
+                        width: "55px",
+                        padding: "6px 4px",
                         textAlign: "center",
                         fontSize: "0.82rem",
                         fontWeight: 700,
@@ -889,9 +916,53 @@ export function LuckyWheelClient({ currentUser, loggedInMemberId }: LuckyWheelCl
                     <span style={{ fontSize: "0.75rem", fontWeight: 700, color: "#facc15" }}>%</span>
                   </div>
                 </div>
+
+                {/* Nút Xóa */}
+                <button
+                  type="button"
+                  onClick={() => handleRemoveOption(opt.id)}
+                  title="Xóa ô phần thưởng này"
+                  style={{
+                    width: "32px",
+                    height: "32px",
+                    borderRadius: "6px",
+                    border: "none",
+                    background: "rgba(239, 68, 68, 0.15)",
+                    color: "#f87171",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    cursor: "pointer",
+                  }}
+                >
+                  <Trash2 size={15} />
+                </button>
               </div>
             ))}
           </div>
+
+          {/* Nút Thêm Ô Phần Thưởng Mới */}
+          <button
+            type="button"
+            onClick={handleAddOption}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: "6px",
+              padding: "10px",
+              borderRadius: "10px",
+              background: "rgba(34, 197, 94, 0.12)",
+              border: "1px dashed rgba(34, 197, 94, 0.4)",
+              color: "#4ade80",
+              fontWeight: 700,
+              fontSize: "0.85rem",
+              cursor: "pointer",
+              transition: "all 0.2s",
+            }}
+          >
+            <Plus size={16} /> Thêm Ô Phần Thưởng Mới
+          </button>
 
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px", background: "rgba(250,204,21,0.08)", borderRadius: "8px", border: "1px solid rgba(250,204,21,0.2)" }}>
             <span style={{ fontSize: "0.8rem", color: "#fef08a" }}>

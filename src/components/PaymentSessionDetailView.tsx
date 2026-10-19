@@ -138,7 +138,7 @@ export function PaymentSessionDetailView({
                 gap: "4px",
               }}
             >
-              <CheckSquare size={13} /> Chọn tất cả chưa thu ({unpaidItems.length})
+              <CheckSquare size={13} /> Tất cả ({unpaidItems.length})
             </button>
 
             {selectedIds.size > 0 && (
@@ -189,8 +189,8 @@ export function PaymentSessionDetailView({
                   {isBulkLoading
                     ? "Đang xử lý..."
                     : isBulkConfirming
-                    ? `Xác nhận thu ${selectedIds.size} khoản (${formatCurrency(selectedTotalAmount)})?`
-                    : `Thu tiền ${selectedIds.size} khoản đã chọn (${formatCurrency(selectedTotalAmount)})`}
+                    ? `Xác nhận thu ${selectedIds.size}?`
+                    : `Đã chọn ${selectedIds.size} (${formatCurrency(selectedTotalAmount)})`}
                 </button>
               </>
             )}

@@ -374,7 +374,7 @@ const BANK_APP_MAP: Record<string, string> = {
       >
         <QrCode size={18} />
         {selectedRecordIds.length > 0
-          ? `Tạo VietQR (${formatCurrency(selectedTotalAmount)})`
+          ? formatCurrency(selectedTotalAmount)
           : "Chọn trận cần đóng"}
       </button>
 

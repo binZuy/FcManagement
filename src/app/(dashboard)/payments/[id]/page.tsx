@@ -263,7 +263,7 @@ export default async function MemberPaymentDetailPage({ params }: Params) {
       >
         <span>💡</span>
         <span>
-          Tick chọn các trận cần đóng và bấm <strong>Tạo VietQR</strong> để thanh toán tự động qua App ngân hàng.
+          Tick chọn các trận cần đóng và bấm nút <strong>QR</strong> để thanh toán tự động qua App ngân hàng.
         </span>
       </div>
 
