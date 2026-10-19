@@ -1063,16 +1063,16 @@ export default function MatchEditPage({ params }: Params) {
               Bước 4: Vinh Danh MOTM & Ảnh Kỷ Niệm ⭐
             </h3>
             <div style={{ fontSize: "0.75rem", color: "var(--muted-foreground)" }}>
-              Chọn cầu thủ xuất sắc nhất và lưu khoảnh khắc đẹp của trận đấu
+              Chọn MOTM và lưu khoảnh khắc đẹp của trận đấu
             </div>
           </div>
         </div>
 
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: "14px" }}>
-          {/* Chọn Cầu thủ xuất sắc nhất */}
+          {/* Chọn MOTM */}
           <div>
             <label style={{ display: "block", marginBottom: "6px", fontSize: "0.85rem", color: "var(--muted-foreground)", fontWeight: 600 }}>
-              Cầu thủ xuất sắc nhất trận (MOTM)
+              MOTM ⭐
             </label>
             <select
               value={motmMemberId}

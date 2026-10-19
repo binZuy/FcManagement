@@ -137,30 +137,20 @@ export default async function PaymentsPage() {
               🎡
             </div>
             <div>
-              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                <span style={{ fontWeight: 800, fontSize: "1.05rem", color: "#facc15" }}>
-                  Quỹ Thưởng Vòng Quay May Mắn
-                </span>
-                <span style={{ fontSize: "0.7rem", padding: "1px 6px", borderRadius: "4px", background: "rgba(250,204,21,0.2)", color: "#fef08a", fontWeight: 700 }}>
-                  20k gốc + Phạt trễ
-                </span>
+              <div style={{ fontWeight: 800, fontSize: "1.05rem", color: "#facc15" }}>
+                Vòng quay may mắn
               </div>
-              <div style={{ fontSize: "0.78rem", color: "var(--muted-foreground)", marginTop: "2px" }}>
-                Toàn bộ tiền phạt nộp chậm được chuyển vào quỹ thưởng cho anh em quay thưởng!
+              <div style={{ fontSize: "0.75rem", color: "var(--muted-foreground)", marginTop: "2px" }}>
+                Quỹ thưởng: {formatCurrency(currentWheelFund)}
               </div>
             </div>
           </div>
 
-          <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
-            <div style={{ textAlign: "right" }}>
-              <div style={{ fontSize: "1.3rem", fontWeight: 900, color: "#facc15" }}>
-                {formatCurrency(currentWheelFund)}
-              </div>
-              <div style={{ fontSize: "0.7rem", color: "#fef08a" }}>
-                Nhấn để vào quay thưởng →
-              </div>
-            </div>
-            <ChevronRight size={20} color="#facc15" />
+          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            <span style={{ fontSize: "0.8rem", color: "#fef08a", fontWeight: 700 }}>
+              Quay ngay
+            </span>
+            <ChevronRight size={18} color="#facc15" />
           </div>
         </div>
       </Link>

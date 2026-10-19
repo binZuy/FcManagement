@@ -130,8 +130,8 @@ export default async function MatchDetailPage({ params }: Params) {
               </div>
             )}
             <div>
-              <div style={{ fontSize: "0.7rem", fontWeight: 800, color: "#facc15", textTransform: "uppercase" }}>
-                Cầu thủ xuất sắc nhất trận (MOTM) ⭐
+              <div style={{ fontSize: "0.75rem", fontWeight: 800, color: "#facc15", textTransform: "uppercase" }}>
+                MOTM ⭐
               </div>
               <div style={{ fontWeight: 800, fontSize: "0.95rem", color: "#f8fafc" }}>
                 {match.motmMember.user.name} {match.motmMember.jerseyNumber && `(#${match.motmMember.jerseyNumber})`}

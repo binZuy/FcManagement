@@ -21,12 +21,12 @@ interface SpinHistoryItem {
 }
 
 const DEFAULT_OPTIONS: WheelOption[] = [
-  { id: "1", label: "Lon Nước Ngọt", icon: "🥤", color: "#3b82f6", weight: 20 },
-  { id: "2", label: "Voucher 50% Sân", icon: "🏷️", color: "#ef4444", weight: 5 },
-  { id: "3", label: "Mời Trà Đá", icon: "🍵", color: "#8b5cf6", weight: 25 },
-  { id: "4", label: "Chọn Team Trận Tới", icon: "👑", color: "#eab308", weight: 15 },
-  { id: "5", label: "Vé Gala Cuối Năm", icon: "🎟️", color: "#10b981", weight: 15 },
-  { id: "6", label: "May Mắn Lần Sau", icon: "🍀", color: "#64748b", weight: 20 },
+  { id: "1", label: "Được cùng đội với binzuy", icon: "👑", color: "#3b82f6", weight: 35 },
+  { id: "2", label: "Được mời nước Duy", icon: "☕", color: "#8b5cf6", weight: 20 },
+  { id: "3", label: "Đen thế lần sau nhé", icon: "😂", color: "#64748b", weight: 35 },
+  { id: "4", label: "discount 5k", icon: "💵", color: "#10b981", weight: 4.5 },
+  { id: "5", label: "được Duy mời nước", icon: "🥤", color: "#f59e0b", weight: 4.4 },
+  { id: "6", label: "jackpot free tiền sân trận sau", icon: "🎰", color: "#ef4444", weight: 0.1 },
 ];
 
 interface LuckyWheelClientProps {
@@ -62,8 +62,8 @@ export function LuckyWheelClient({ currentUser, totalPoolAmount }: LuckyWheelCli
 
   // Load state từ localStorage
   useEffect(() => {
-    // Load options
-    const savedOptions = localStorage.getItem("fc_wheel_options");
+    // Load options (v3)
+    const savedOptions = localStorage.getItem("fc_wheel_options_v3");
     if (savedOptions) {
       try {
         setBaseOptions(JSON.parse(savedOptions));
@@ -307,14 +307,14 @@ export function LuckyWheelClient({ currentUser, totalPoolAmount }: LuckyWheelCli
 
   // Lưu cấu hình Admin
   const handleSaveSettings = () => {
-    localStorage.setItem("fc_wheel_options", JSON.stringify(baseOptions));
+    localStorage.setItem("fc_wheel_options_v3", JSON.stringify(baseOptions));
     showToast.success("Đã lưu thiết lập tỉ lệ vòng quay!");
     setActiveTab("wheel");
   };
 
   const handleResetSettings = () => {
     setBaseOptions(DEFAULT_OPTIONS);
-    localStorage.removeItem("fc_wheel_options");
+    localStorage.removeItem("fc_wheel_options_v3");
     showToast.success("Đã khôi phục thiết lập mặc định!");
   };
 
@@ -521,8 +521,8 @@ export function LuckyWheelClient({ currentUser, totalPoolAmount }: LuckyWheelCli
             >
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div>
-                  <div style={{ fontSize: "0.75rem", fontWeight: 700, color: "#facc15" }}>
-                    🎁 Quỹ Thưởng Tài Trợ
+                  <div style={{ fontSize: "0.8rem", fontWeight: 700, color: "#facc15" }}>
+                    🎁 Quỹ thưởng
                   </div>
                   <div style={{ fontSize: "1.4rem", fontWeight: 900, color: "#fef08a", marginTop: "2px" }}>
                     {formatCurrency(totalPoolAmount)}
@@ -531,9 +531,6 @@ export function LuckyWheelClient({ currentUser, totalPoolAmount }: LuckyWheelCli
                 <div style={{ width: 40, height: 40, borderRadius: 10, background: "rgba(250,204,21,0.2)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.3rem" }}>
                   💰
                 </div>
-              </div>
-              <div style={{ fontSize: "0.72rem", color: "var(--muted-foreground)", marginTop: "6px" }}>
-                Gồm 20.000đ quỹ khởi điểm + tiền phạt nộp chậm của anh em nợ quá 4 trận tài trợ!
               </div>
             </div>
 
@@ -714,10 +711,11 @@ export function LuckyWheelClient({ currentUser, totalPoolAmount }: LuckyWheelCli
                       type="number"
                       min={0}
                       max={100}
+                      step="0.1"
                       value={opt.weight}
-                      onChange={(e) => updateOption(idx, "weight", Number(e.target.value) || 0)}
+                      onChange={(e) => updateOption(idx, "weight", parseFloat(e.target.value) || 0)}
                       style={{
-                        width: "55px",
+                        width: "60px",
                         padding: "6px 8px",
                         textAlign: "center",
                         fontSize: "0.82rem",
@@ -737,7 +735,7 @@ export function LuckyWheelClient({ currentUser, totalPoolAmount }: LuckyWheelCli
 
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px", background: "rgba(250,204,21,0.08)", borderRadius: "8px", border: "1px solid rgba(250,204,21,0.2)" }}>
             <span style={{ fontSize: "0.8rem", color: "#fef08a" }}>
-              💡 Tổng tỉ lệ ảo: {baseOptions.reduce((sum, o) => sum + Number(o.weight || 0), 0)}% (Hệ thống tự động chuẩn hóa tỉ lệ theo trọng số)
+              💡 Tổng tỉ lệ ảo: {Number(baseOptions.reduce((sum, o) => sum + Number(o.weight || 0), 0).toFixed(2))}% (Hệ thống tự động chuẩn hóa tỉ lệ theo trọng số)
             </span>
           </div>
         </div>

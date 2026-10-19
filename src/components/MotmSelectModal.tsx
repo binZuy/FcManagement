@@ -143,7 +143,7 @@ export function MotmSelectModal({
           gap: "6px",
           boxShadow: currentMotmId ? "0 0 12px rgba(250,204,21,0.2)" : "none",
         }}
-        title="Bình chọn MOTM (Cầu thủ xuất sắc nhất trận) & Lưu ảnh kỷ niệm"
+        title="Bình chọn MOTM & Lưu ảnh kỷ niệm"
       >
         <Star size={16} color="#facc15" fill={currentMotmId ? "#facc15" : "none"} />
         <span className="btn-label-desktop">
@@ -195,7 +195,7 @@ export function MotmSelectModal({
                     Vinh Danh MOTM ⭐
                   </h3>
                   <div style={{ fontSize: "0.72rem", color: "var(--muted-foreground)" }}>
-                    Chọn Cầu thủ xuất sắc nhất & Tải ảnh kỷ niệm trận đấu
+                    Chọn MOTM & Tải ảnh kỷ niệm trận đấu
                   </div>
                 </div>
               </div>
@@ -213,7 +213,7 @@ export function MotmSelectModal({
               {/* Chọn cầu thủ MOTM */}
               <div>
                 <label style={{ display: "block", fontSize: "0.82rem", fontWeight: 700, color: "var(--card-foreground)", marginBottom: "6px" }}>
-                  Cầu thủ xuất sắc nhất trận:
+                  MOTM trận đấu ⭐:
                 </label>
                 <select
                   value={selectedMemberId}
