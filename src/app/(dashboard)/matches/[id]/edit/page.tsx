@@ -3,7 +3,7 @@
 import { useState, useEffect, use, useCallback, memo } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, CheckCircle, Save, Users, Trophy, Coffee, Search, CheckSquare, Square, UserCheck, Loader2, Star, Image as ImageIcon, Plus, Trash2 } from "lucide-react";
+import { ArrowLeft, CheckCircle, Save, Users, Trophy, Coffee, Search, CheckSquare, Square, UserCheck, Loader2, Star, Image as ImageIcon, Plus, Trash2, Upload } from "lucide-react";
 import { showToast } from "@/components/Toast";
 import { FEE_SPLIT_METHOD, FEE_SPLIT_METHOD_LABELS } from "@/lib/constants";
 
@@ -340,6 +340,7 @@ export default function MatchEditPage({ params }: Params) {
   const [motmNote, setMotmNote] = useState<string>("");
   const [photos, setPhotos] = useState<string[]>([]);
   const [newPhotoUrl, setNewPhotoUrl] = useState<string>("");
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState<boolean>(false);
   
   // Attendance state
   const [attendances, setAttendances] = useState<Record<string, any>>({});
@@ -535,6 +536,42 @@ export default function MatchEditPage({ params }: Params) {
     setAttendances(updated);
   };
 
+  // Upload ảnh trực tiếp từ máy / điện thoại
+  const handleFileUploadInEdit = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    setIsUploadingPhoto(true);
+    try {
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        const formData = new FormData();
+        formData.append("file", file);
+
+        const res = await fetch("/api/upload", {
+          method: "POST",
+          body: formData,
+        });
+
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err.error || "Lỗi tải ảnh");
+        }
+
+        const data = await res.json();
+        if (data.url) {
+          setPhotos((prev) => [...prev, data.url]);
+        }
+      }
+      showToast.success("Tải ảnh thành công!");
+    } catch (err: any) {
+      showToast.error(err.message || "Lỗi tải ảnh");
+    } finally {
+      setIsUploadingPhoto(false);
+      e.target.value = "";
+    }
+  };
+
   // Lọc theo tìm kiếm từ khóa
   const filteredMembersList = allMembers.filter((m) => {
     if (!searchQuery) return true;
@@ -689,8 +726,9 @@ export default function MatchEditPage({ params }: Params) {
       {/* Header section với khoảng cách gần, hợp lý cả mobile và web */}
       <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px" }}>
-          <Link href={`/matches/${id}`} className="btn btn-secondary" style={{ padding: "6px 10px", fontSize: "0.78rem" }}>
-            <ArrowLeft size={15} /> Quay lại
+          <Link href={`/matches/${id}`} className="btn btn-secondary btn-mobile-icon-only" style={{ padding: "6px 10px", fontSize: "0.78rem" }} title="Quay lại">
+            <ArrowLeft size={15} />
+            <span className="btn-label-desktop">Quay lại</span>
           </Link>
 
           <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
@@ -698,22 +736,24 @@ export default function MatchEditPage({ params }: Params) {
             <button
               onClick={handleSaveDraft}
               disabled={savingAttendance || savingFinalize}
-              className="btn btn-secondary"
+              className="btn btn-secondary btn-mobile-icon-only"
               style={{ padding: "6px 10px", fontWeight: 700, fontSize: "0.78rem", whiteSpace: "nowrap" }}
+              title="Lưu thay đổi"
             >
               {savingAttendance ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
-              {savingAttendance ? "Đang lưu..." : "Lưu"}
+              <span className="btn-label-desktop">{savingAttendance ? "Đang lưu..." : "Lưu"}</span>
             </button>
 
             {/* Nút 2: Chốt sổ trận đấu */}
             <button
               onClick={handleFinalizeMatch}
               disabled={savingAttendance || savingFinalize}
-              className="btn btn-primary"
-              style={{ padding: "6px 12px", fontWeight: 800, fontSize: "0.78rem", whiteSpace: "nowrap" }}
+              className="btn btn-primary btn-mobile-icon-only"
+              style={{ padding: "6px 14px", fontWeight: 800, fontSize: "0.78rem", whiteSpace: "nowrap" }}
+              title="Chốt sổ trận đấu"
             >
               {savingFinalize ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle size={14} />}
-              {savingFinalize ? "Đang xử lý..." : "Chốt sổ"}
+              <span className="btn-label-desktop">{savingFinalize ? "Đang xử lý..." : "Chốt sổ"}</span>
             </button>
           </div>
         </div>
@@ -1075,16 +1115,57 @@ export default function MatchEditPage({ params }: Params) {
 
         {/* Quản lý ảnh kỷ niệm */}
         <div style={{ borderTop: "1px solid rgba(255,255,255,0.06)", paddingTop: "14px" }}>
-          <label style={{ display: "block", marginBottom: "6px", fontSize: "0.85rem", color: "var(--muted-foreground)", fontWeight: 600 }}>
-            📸 Thêm link ảnh kỷ niệm trận bóng (Ảnh chụp cả đội, khoảnh khắc đẹp):
-          </label>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px", flexWrap: "wrap", gap: "8px" }}>
+            <label style={{ fontSize: "0.85rem", color: "var(--muted-foreground)", fontWeight: 600 }}>
+              📸 Ảnh kỷ niệm trận bóng ({photos.length} ảnh):
+            </label>
+
+            {/* Input file an toàn cho mobile */}
+            <input
+              id="edit-match-photo-upload"
+              type="file"
+              onChange={handleFileUploadInEdit}
+              accept="image/*"
+              multiple
+              disabled={isUploadingPhoto}
+              style={{
+                position: "absolute",
+                width: "1px",
+                height: "1px",
+                padding: 0,
+                margin: "-1px",
+                overflow: "hidden",
+                clip: "rect(0, 0, 0, 0)",
+                whiteSpace: "nowrap",
+                border: 0,
+              }}
+            />
+
+            <label
+              htmlFor="edit-match-photo-upload"
+              className="btn btn-secondary"
+              style={{
+                padding: "6px 12px",
+                fontSize: "0.78rem",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "6px",
+                cursor: isUploadingPhoto ? "not-allowed" : "pointer",
+                opacity: isUploadingPhoto ? 0.6 : 1,
+              }}
+            >
+              {isUploadingPhoto ? <Loader2 size={13} className="animate-spin" /> : <Upload size={13} />}
+              <span>{isUploadingPhoto ? "Đang tải ảnh..." : "Chọn ảnh từ máy"}</span>
+            </label>
+          </div>
+
           <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
             <input
               type="url"
               value={newPhotoUrl}
               onChange={(e) => setNewPhotoUrl(e.target.value)}
               className="form-input"
-              placeholder="Dán link ảnh (https://...)"
+              placeholder="Hoặc dán link ảnh (https://...)"
               style={{ flex: 1 }}
             />
             <button
@@ -1099,7 +1180,7 @@ export default function MatchEditPage({ params }: Params) {
               className="btn btn-secondary"
               style={{ padding: "8px 14px", fontSize: "0.82rem", whiteSpace: "nowrap" }}
             >
-              <Plus size={15} /> Thêm ảnh
+              <Plus size={15} /> Thêm link
             </button>
           </div>
 
@@ -1130,21 +1211,23 @@ export default function MatchEditPage({ params }: Params) {
         <button
           onClick={handleSaveDraft}
           disabled={savingAttendance || savingFinalize}
-          className="btn btn-secondary"
+          className="btn btn-secondary btn-mobile-icon-only"
           style={{ padding: "8px 14px", fontWeight: 700, fontSize: "0.82rem", whiteSpace: "nowrap" }}
+          title="Lưu thay đổi"
         >
           {savingAttendance ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
-          {savingAttendance ? "Đang lưu..." : "Lưu"}
+          <span className="btn-label-desktop">{savingAttendance ? "Đang lưu..." : "Lưu"}</span>
         </button>
 
         <button
           onClick={handleFinalizeMatch}
           disabled={savingAttendance || savingFinalize}
-          className="btn btn-primary"
+          className="btn btn-primary btn-mobile-icon-only"
           style={{ padding: "8px 16px", fontWeight: 800, fontSize: "0.82rem", whiteSpace: "nowrap" }}
+          title="Chốt sổ trận đấu"
         >
           {savingFinalize ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle size={16} />}
-          {savingFinalize ? "Đang xử lý..." : "Chốt sổ"}
+          <span className="btn-label-desktop">{savingFinalize ? "Đang xử lý..." : "Chốt sổ"}</span>
         </button>
       </div>
     </div>

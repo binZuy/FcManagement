@@ -55,6 +55,13 @@ body {
   .desktop-only-table {
     display: none !important;
   }
+  /* Ẩn text trên mobile, chỉ hiện icon để nút không bị tràn */
+  .btn-label-desktop {
+    display: none !important;
+  }
+  .btn-mobile-icon-only {
+    padding: 6px 10px !important;
+  }
 }
 
 @keyframes slideInRight {

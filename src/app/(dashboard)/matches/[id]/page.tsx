@@ -3,9 +3,10 @@ import { auth } from "@/lib/auth";
 import { formatCurrency, formatDateTime } from "@/lib/utils";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, MapPin, Edit, Users, UserCheck } from "lucide-react";
+import { ArrowLeft, MapPin, Edit, Users, UserCheck, Star, Image as ImageIcon } from "lucide-react";
 import { MatchStatus } from "@prisma/client";
 import { MatchAdminActions } from "@/components/MatchAdminActions";
+import { MotmSelectModal } from "@/components/MotmSelectModal";
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
   UPCOMING: { label: "Sắp diễn ra", color: "#60a5fa", bg: "rgba(96,165,250,0.12)" },
@@ -43,6 +44,9 @@ export default async function MatchDetailPage({ params }: Params) {
         },
         orderBy: { member: { user: { name: "asc" } } },
       },
+      motmMember: {
+        include: { user: { select: { name: true, image: true } } },
+      },
       paymentSessions: {
         select: { id: true, title: true, status: true },
       },
@@ -56,9 +60,10 @@ export default async function MatchDetailPage({ params }: Params) {
   const attendedList = match.attendances.filter((a) => a.status === "ATTENDED");
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
-      <Link href="/matches" className="btn btn-secondary" style={{ alignSelf: "flex-start", padding: "6px 12px", fontSize: "0.82rem" }}>
-        <ArrowLeft size={16} /> Quay lại danh sách
+    <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+      <Link href="/matches" className="btn btn-secondary btn-mobile-icon-only" style={{ alignSelf: "flex-start", padding: "6px 12px", fontSize: "0.82rem" }} title="Quay lại danh sách">
+        <ArrowLeft size={16} />
+        <span className="btn-label-desktop">Quay lại danh sách</span>
       </Link>
 
       {/* Header Match info */}
@@ -87,14 +92,74 @@ export default async function MatchDetailPage({ params }: Params) {
             </div>
           </div>
           {isAdmin && (
-            <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
+            <div style={{ display: "flex", gap: "6px", alignItems: "center", flexWrap: "wrap" }}>
+              {/* NÚT MOTM ĐƯỢC TÁCH RIÊNG THÀNH 1 BUTTON */}
+              <MotmSelectModal
+                matchId={match.id}
+                currentMotmId={match.motmMemberId}
+                currentMotmNote={match.motmNote}
+                currentPhotos={match.photos}
+                attendances={match.attendances}
+              />
               <MatchAdminActions match={match} />
-              <Link href={`/matches/${match.id}/edit`} className="btn btn-primary" style={{ padding: "6px 14px", fontSize: "0.82rem", fontWeight: 700 }}>
-                <Edit size={16} /> Điểm danh & Cập nhật
+              <Link href={`/matches/${match.id}/edit`} className="btn btn-primary btn-mobile-icon-only" style={{ padding: "6px 14px", fontSize: "0.82rem", fontWeight: 700 }} title="Điểm danh & Cập nhật">
+                <Edit size={16} />
+                <span className="btn-label-desktop">Điểm danh & Cập nhật</span>
               </Link>
             </div>
           )}
         </div>
+
+        {/* CARD MOTM CỦA TRẬN ĐẤU (NẾU ĐÃ CHỌN) */}
+        {match.motmMember && (
+          <div style={{
+            marginBottom: "16px",
+            padding: "12px 16px",
+            borderRadius: "12px",
+            background: "linear-gradient(135deg, rgba(250,204,21,0.12), rgba(0,0,0,0.3))",
+            border: "1px solid rgba(250,204,21,0.3)",
+            display: "flex",
+            alignItems: "center",
+            gap: "12px",
+          }}>
+            {match.motmMember.user.image ? (
+              <img src={match.motmMember.user.image} alt="" style={{ width: 42, height: 42, borderRadius: "50%", border: "2px solid #facc15", objectFit: "cover" }} />
+            ) : (
+              <div style={{ width: 42, height: 42, borderRadius: "50%", background: "#facc15", color: "#0f172a", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, fontSize: "1.1rem" }}>
+                ⭐
+              </div>
+            )}
+            <div>
+              <div style={{ fontSize: "0.7rem", fontWeight: 800, color: "#facc15", textTransform: "uppercase" }}>
+                Cầu thủ xuất sắc nhất trận (MOTM) ⭐
+              </div>
+              <div style={{ fontWeight: 800, fontSize: "0.95rem", color: "#f8fafc" }}>
+                {match.motmMember.user.name} {match.motmMember.jerseyNumber && `(#${match.motmMember.jerseyNumber})`}
+              </div>
+              {match.motmNote && (
+                <div style={{ fontSize: "0.78rem", color: "#fef08a", fontStyle: "italic", marginTop: "2px" }}>
+                  "{match.motmNote}"
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ALBUM ẢNH KỶ NIỆM */}
+        {match.photos && match.photos.length > 0 && (
+          <div style={{ marginBottom: "16px" }}>
+            <div style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--muted-foreground)", marginBottom: "6px" }}>
+              📸 Khoảnh khắc trận đấu ({match.photos.length} ảnh):
+            </div>
+            <div style={{ display: "flex", gap: "8px", overflowX: "auto", paddingBottom: "4px" }}>
+              {match.photos.map((photo, pIdx) => (
+                <a key={pIdx} href={photo} target="_blank" rel="noopener noreferrer">
+                  <img src={photo} alt="" style={{ width: 95, height: 68, borderRadius: "8px", objectFit: "cover", border: "1px solid rgba(255,255,255,0.15)" }} />
+                </a>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Overview Row */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: "12px", padding: "14px", background: "rgba(30,41,59,0.4)", borderRadius: "10px", marginTop: "16px" }}>

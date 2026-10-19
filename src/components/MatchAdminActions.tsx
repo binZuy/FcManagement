@@ -106,20 +106,20 @@ export function MatchAdminActions({ match }: MatchAdminActionsProps) {
   return (
     <>
       {/* Nút thao tác Admin */}
-      <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
+      <div style={{ display: "flex", gap: "6px", alignItems: "center", flexWrap: "wrap" }}>
         <button
           onClick={handleOpenEdit}
-          className="btn btn-secondary"
+          className="btn btn-secondary btn-mobile-icon-only"
           style={{ padding: "6px 12px", fontSize: "0.82rem", fontWeight: 700 }}
           title="Chỉnh sửa thời gian, loại trận, tên trận"
         >
           <Edit3 size={15} />
-          <span>Sửa thông tin</span>
+          <span className="btn-label-desktop">Sửa</span>
         </button>
 
         <button
           onClick={() => setShowDeleteModal(true)}
-          className="btn"
+          className="btn btn-mobile-icon-only"
           style={{
             padding: "6px 12px",
             fontSize: "0.82rem",
@@ -128,10 +128,10 @@ export function MatchAdminActions({ match }: MatchAdminActionsProps) {
             color: "#f87171",
             border: "1px solid rgba(239, 68, 68, 0.3)",
           }}
-          title="Xóa trận đấu nếu bị tạo trùng"
+          title="Xóa trận đấu"
         >
           <Trash2 size={15} />
-          <span>Xóa trận</span>
+          <span className="btn-label-desktop">Xóa</span>
         </button>
       </div>
 
