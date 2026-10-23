@@ -82,15 +82,68 @@ export default async function MatchDetailPage({ params }: Params) {
     }));
   }
 
-  const initialPlayers: PitchPlayer[] = match.attendances.map((a) => ({
-    memberId: a.memberId,
-    name: a.member.user.name || "Cầu thủ",
-    image: a.member.user.image,
-    jerseyNumber: a.member.jerseyNumber,
-    position: a.member.position,
-    guestCount: a.guestCount,
-    teamSide: a.teamSide as "TEAM_A" | "TEAM_B" | null,
-  }));
+  // Check if any attended member has teamSide === "TEAM_B" (indicates historical match with split teams)
+  const hasExplicitTeamB = match.attendances.some(
+    (a) => (a.status === "ATTENDED" || a.status === "LATE") && a.teamSide === "TEAM_B"
+  );
+
+  const initialPlayers: PitchPlayer[] = [];
+
+  for (const a of match.attendances) {
+    const isAttended = a.status === "ATTENDED" || a.status === "LATE";
+    let effectiveSide: "TEAM_A" | "TEAM_B" | null = a.teamSide as "TEAM_A" | "TEAM_B" | null;
+
+    // For historical/completed matches:
+    // If a.teamSide wasn't explicitly saved as TEAM_A, but there are TEAM_B players in the match,
+    // then all other ATTENDED players were on TEAM_A (the old system default).
+    if (!effectiveSide && isAttended && hasExplicitTeamB) {
+      effectiveSide = "TEAM_A";
+    }
+
+    // If member was ABSENT or EXCUSED, they shouldn't be assigned to a team on the pitch
+    if (!isAttended) {
+      effectiveSide = null;
+    }
+
+    // 1. Thành viên chính thức
+    initialPlayers.push({
+      memberId: a.memberId,
+      name: a.member.user.name || "Cầu thủ",
+      image: a.member.user.image,
+      jerseyNumber: a.member.jerseyNumber,
+      position: a.member.position,
+      guestCount: a.guestCount,
+      teamSide: effectiveSide,
+      status: a.status,
+      isGuest: false,
+    });
+
+    // 2. Nếu thành viên có bạn đi cùng (guestCount > 0):
+    // Tạo cầu thủ đại diện cho bạn của thành viên, LUÔN CÙNG ĐỘI VỚI THÀNH VIÊN
+    if (isAttended && a.guestCount > 0) {
+      for (let g = 1; g <= a.guestCount; g++) {
+        const guestName =
+          a.guestCount > 1
+            ? `Bạn ${g} (${a.member.user.name || "Cầu thủ"})`
+            : `Bạn của ${a.member.user.name || "Cầu thủ"}`;
+        initialPlayers.push({
+          memberId: `guest_${a.memberId}_${g}`,
+          name: guestName,
+          image: null,
+          jerseyNumber: null,
+          position: null,
+          guestCount: 0,
+          teamSide: effectiveSide, // CÙNG ĐỘI VỚI THÀNH VIÊN
+          status: a.status,
+          isGuest: true,
+          hostMemberId: a.memberId,
+          hostName: a.member.user.name || "Cầu thủ",
+        });
+      }
+    }
+  }
+
+  const playerTeamMap = new Map(initialPlayers.map((p) => [p.memberId, p.teamSide]));
 
   const statusCfg = STATUS_CONFIG[match.status] ?? STATUS_CONFIG.UPCOMING;
   const resultCfg = match.result ? RESULT_CONFIG[match.result] : null;
@@ -295,17 +348,17 @@ export default async function MatchDetailPage({ params }: Params) {
                                 <span style={{ fontWeight: 600, color: "var(--card-foreground)", fontSize: "0.88rem" }}>
                                   {a.member.user.name}
                                 </span>
-                                {match.matchType === "INTERNAL" && a.teamSide && (
+                                {match.matchType === "INTERNAL" && playerTeamMap.get(a.memberId) && (
                                   <span style={{
                                     fontSize: "0.7rem",
                                     padding: "2px 7px",
                                     borderRadius: "6px",
                                     fontWeight: 700,
-                                    background: a.teamSide === "TEAM_A" ? "rgba(59,130,246,0.18)" : "rgba(245,158,11,0.18)",
-                                    color: a.teamSide === "TEAM_A" ? "#60a5fa" : "#f59e0b",
-                                    border: a.teamSide === "TEAM_A" ? "1px solid rgba(59,130,246,0.3)" : "1px solid rgba(245,158,11,0.3)",
+                                    background: playerTeamMap.get(a.memberId) === "TEAM_A" ? "rgba(59,130,246,0.18)" : "rgba(245,158,11,0.18)",
+                                    color: playerTeamMap.get(a.memberId) === "TEAM_A" ? "#60a5fa" : "#f59e0b",
+                                    border: playerTeamMap.get(a.memberId) === "TEAM_A" ? "1px solid rgba(59,130,246,0.3)" : "1px solid rgba(245,158,11,0.3)",
                                   }}>
-                                    {a.teamSide === "TEAM_A" ? (match.teamAName || "Đội A") : (match.teamBName || "Đội B")}
+                                    {playerTeamMap.get(a.memberId) === "TEAM_A" ? (match.teamAName || "Đội A") : (match.teamBName || "Đội B")}
                                   </span>
                                 )}
                                 {a.guestCount > 0 && (
@@ -351,6 +404,7 @@ export default async function MatchDetailPage({ params }: Params) {
                 .filter((a) => a.status === "ATTENDED" || a.status === "LATE")
                 .map((a) => {
                 const st = ATTENDANCE_STATUS[a.status] ?? { label: a.status, color: "white", bg: "transparent" };
+                const assignedTeam = playerTeamMap.get(a.memberId);
                 return (
                   <div
                     key={a.id}
@@ -378,18 +432,18 @@ export default async function MatchDetailPage({ params }: Params) {
                           <span style={{ fontWeight: 700, color: "var(--card-foreground)", fontSize: "0.88rem", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                             {a.member.user.name}
                           </span>
-                          {match.matchType === "INTERNAL" && a.teamSide && (
+                          {match.matchType === "INTERNAL" && assignedTeam && (
                             <span style={{
                               fontSize: "0.65rem",
                               padding: "1px 6px",
                               borderRadius: "6px",
                               fontWeight: 700,
-                              background: a.teamSide === "TEAM_A" ? "rgba(59,130,246,0.18)" : "rgba(245,158,11,0.18)",
-                              color: a.teamSide === "TEAM_A" ? "#60a5fa" : "#f59e0b",
-                              border: a.teamSide === "TEAM_A" ? "1px solid rgba(59,130,246,0.3)" : "1px solid rgba(245,158,11,0.3)",
+                              background: assignedTeam === "TEAM_A" ? "rgba(59,130,246,0.18)" : "rgba(245,158,11,0.18)",
+                              color: assignedTeam === "TEAM_A" ? "#60a5fa" : "#f59e0b",
+                              border: assignedTeam === "TEAM_A" ? "1px solid rgba(59,130,246,0.3)" : "1px solid rgba(245,158,11,0.3)",
                               whiteSpace: "nowrap",
                             }}>
-                              {a.teamSide === "TEAM_A" ? (match.teamAName || "Đội A") : (match.teamBName || "Đội B")}
+                              {assignedTeam === "TEAM_A" ? (match.teamAName || "Đội A") : (match.teamBName || "Đội B")}
                             </span>
                           )}
                         </div>

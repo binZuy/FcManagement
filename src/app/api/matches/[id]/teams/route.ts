@@ -44,9 +44,10 @@ export async function POST(req: NextRequest, { params }: Params) {
       });
     }
 
-    // 2. Cập nhật Đội A
+    // 2. Cập nhật Đội A (chỉ cập nhật thành viên chính thức trong DB)
     if (Array.isArray(teamA)) {
       for (const memberId of teamA) {
+        if (memberId.startsWith("guest_")) continue;
         await prisma.matchAttendance.upsert({
           where: { matchId_memberId: { matchId, memberId } },
           update: { teamSide: TeamSide.TEAM_A, status: AttendStatus.ATTENDED },
@@ -60,9 +61,10 @@ export async function POST(req: NextRequest, { params }: Params) {
       }
     }
 
-    // 3. Cập nhật Đội B
+    // 3. Cập nhật Đội B (chỉ cập nhật thành viên chính thức trong DB)
     if (Array.isArray(teamB)) {
       for (const memberId of teamB) {
+        if (memberId.startsWith("guest_")) continue;
         await prisma.matchAttendance.upsert({
           where: { matchId_memberId: { matchId, memberId } },
           update: { teamSide: TeamSide.TEAM_B, status: AttendStatus.ATTENDED },
@@ -79,6 +81,7 @@ export async function POST(req: NextRequest, { params }: Params) {
     // 4. Cập nhật danh sách chưa chia (hoặc dự bị)
     if (Array.isArray(unassigned)) {
       for (const memberId of unassigned) {
+        if (memberId.startsWith("guest_")) continue;
         await prisma.matchAttendance.updateMany({
           where: { matchId, memberId },
           data: { teamSide: null },
