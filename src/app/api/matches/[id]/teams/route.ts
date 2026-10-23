@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { auth } from "@/lib/auth";
 import { AttendStatus, TeamSide } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
@@ -9,11 +8,6 @@ type Params = { params: Promise<{ id: string }> };
 
 export async function POST(req: NextRequest, { params }: Params) {
   try {
-    const session = await auth();
-    if (!session?.user) {
-      return NextResponse.json({ error: "Vui lòng đăng nhập để sắp xếp đội hình!" }, { status: 401 });
-    }
-
     const { id: matchId } = await params;
     const body = await req.json();
     const { teamA, teamB, unassigned, teamAName, teamBName, removedMemberIds } = body as {
