@@ -73,7 +73,15 @@ export function LuckyWheelClient({ currentUser, loggedInMemberId }: LuckyWheelCl
   // Danh sách thành viên FC từ API
   const [members, setMembers] = useState<WheelMember[]>([]);
   const [selectedMemberId, setSelectedMemberId] = useState<string>("");
+  const [guestBoundMemberId, setGuestBoundMemberId] = useState<string | null>(null);
   const [isLoadingMembers, setIsLoadingMembers] = useState<boolean>(true);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const bound = localStorage.getItem("fc_guest_bound_member_id");
+      if (bound) setGuestBoundMemberId(bound);
+    }
+  }, []);
 
   // Cấu hình options gốc từ DB
   const [baseOptions, setBaseOptions] = useState<WheelOption[]>(DEFAULT_WHEEL_OPTIONS);
@@ -106,6 +114,10 @@ export function LuckyWheelClient({ currentUser, loggedInMemberId }: LuckyWheelCl
           if (loggedInMemberId) {
             const found = data.members.find((m: WheelMember) => m.id === loggedInMemberId);
             if (found) return found.id;
+          }
+          const guestBound = typeof window !== "undefined" ? localStorage.getItem("fc_guest_bound_member_id") : null;
+          if (guestBound && data.members.some((m: WheelMember) => m.id === guestBound)) {
+            return guestBound;
           }
           const savedId = typeof window !== "undefined" ? localStorage.getItem("fc_selected_member_id") : null;
           if (savedId && data.members.some((m: WheelMember) => m.id === savedId)) {
@@ -160,6 +172,10 @@ export function LuckyWheelClient({ currentUser, loggedInMemberId }: LuckyWheelCl
     setSelectedMemberId(memberId);
     if (typeof window !== "undefined") {
       localStorage.setItem("fc_selected_member_id", memberId);
+      if (!currentUser) {
+        localStorage.setItem("fc_guest_bound_member_id", memberId);
+        setGuestBoundMemberId(memberId);
+      }
     }
   };
 
@@ -378,24 +394,29 @@ export function LuckyWheelClient({ currentUser, loggedInMemberId }: LuckyWheelCl
       return;
     }
 
-    if (!currentUser) {
-      showToast.error("Đăng nhập đã rồi quẩy nha 🤙!");
-      return;
-    }
-
     const isSelf = loggedInMemberId ? selectedMember.id === loggedInMemberId : false;
-    if (!isAdmin && !isSelf) {
+    const isGuestUser = !currentUser;
+
+    // Kiểm tra quyền quay:
+    // Nếu đã đăng nhập và không phải Admin: chỉ được quay cho nick chính mình
+    if (!isAdmin && currentUser && !isSelf) {
       showToast.error("Quay nick mình thui, đừng táy máy nick bạn bè 😆");
       return;
     }
 
+    // Nếu là Khách: lưu binding thiết bị với thành viên này
+    if (isGuestUser && typeof window !== "undefined") {
+      localStorage.setItem("fc_guest_bound_member_id", selectedMember.id);
+      setGuestBoundMemberId(selectedMember.id);
+    }
+
     if (selectedMember.unpaidCount > 0) {
-      showToast.error(`Còn nợ hèo ${selectedMember.unpaidCount} trận kìa, đóng xong mới quay được nha 💸`);
+      showToast.error(`Còn ${selectedMember.unpaidCount} trận chưa đóng tiền kìa, đóng xong là được quẩy nha 💸`);
       return;
     }
 
     if (selectedMember.spinsAvailable <= 0) {
-      showToast.error("Hết lượt òi! Trận sau đá tốt + nộp đủ là có lượt ngay nha 🔥");
+      showToast.error("Hết lượt òi! Trận sau đá tốt + đóng đủ là có lượt ngay nha 🔥");
       return;
     }
 
@@ -564,10 +585,10 @@ export function LuckyWheelClient({ currentUser, loggedInMemberId }: LuckyWheelCl
 
   const isGuest = !currentUser;
   const isSelf = loggedInMemberId ? selectedMember?.id === loggedInMemberId : false;
-  const canOperateSpin = isAdmin || (!!currentUser && isSelf);
+  const canOperateSpin = isAdmin || (!!currentUser && isSelf) || isGuest;
   const isUnpaid = selectedMember ? selectedMember.unpaidCount > 0 : false;
   const isOutOfSpins = selectedMember ? selectedMember.spinsAvailable <= 0 : false;
-  const isSpinDisabled = isSpinning || !selectedMember || isGuest || !canOperateSpin || isUnpaid || isOutOfSpins;
+  const isSpinDisabled = isSpinning || !selectedMember || isUnpaid || isOutOfSpins;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "20px", maxWidth: "880px", margin: "0 auto" }}>
@@ -578,7 +599,7 @@ export function LuckyWheelClient({ currentUser, loggedInMemberId }: LuckyWheelCl
             Vòng Quay May Mắn 🎡✨
           </h1>
           <p style={{ fontSize: "0.82rem", color: "var(--muted-foreground)" }}>
-            Sạch hèo là có quà · Quẩy ngay nhận Voucher 5k & Free sân cực cháy 🔥
+            Đóng đủ quỹ là có quà · Quẩy ngay nhận Voucher 5k & Free sân cực cháy 🔥
           </p>
         </div>
 
@@ -762,11 +783,38 @@ export function LuckyWheelClient({ currentUser, loggedInMemberId }: LuckyWheelCl
                     const isMself = loggedInMemberId ? m.id === loggedInMemberId : false;
                     return (
                       <option key={m.id} value={m.id}>
-                        {m.name} {m.jerseyNumber ? `(#${m.jerseyNumber})` : ""} {isMself ? "(Bạn)" : ""} - {m.unpaidCount > 0 ? `Nợ ${m.unpaidCount} trận` : `${m.spinsAvailable} lượt`}
+                        {m.name} {m.jerseyNumber ? `(#${m.jerseyNumber})` : ""} {isMself ? "(Bạn)" : ""} - {m.unpaidCount > 0 ? `Chưa đóng ${m.unpaidCount} trận` : `${m.spinsAvailable} lượt`}
                       </option>
                     );
                   })}
                 </select>
+
+                {/* Banner Chế độ Khách */}
+                {isGuest && selectedMember && (
+                  <div
+                    style={{
+                      marginTop: "6px",
+                      padding: "6px 10px",
+                      borderRadius: "8px",
+                      background: "rgba(59,130,246,0.12)",
+                      border: "1px solid rgba(59,130,246,0.25)",
+                      fontSize: "0.74rem",
+                      color: "#93c5fd",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      gap: "6px",
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", gap: "6px", overflow: "hidden", whiteSpace: "nowrap" }}>
+                      <span>🌐</span>
+                      <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>
+                        Đang quay cho: <strong style={{ color: "white" }}>{selectedMember.name}</strong>
+                      </span>
+                    </div>
+                    <span style={{ fontSize: "0.68rem", color: "#60a5fa", flexShrink: 0 }}>Chế độ Khách</span>
+                  </div>
+                )}
               </div>
 
               {/* Thông báo điều kiện thanh toán */}
@@ -788,7 +836,7 @@ export function LuckyWheelClient({ currentUser, loggedInMemberId }: LuckyWheelCl
                       }}
                     >
                       <div style={{ fontWeight: 700, display: "flex", alignItems: "center", gap: "6px" }}>
-                        <AlertTriangle size={14} color="#f87171" /> Chưa nộp {selectedMember.unpaidCount} trận ({formatCurrency(selectedMember.totalDebt)})
+                        <AlertTriangle size={14} color="#f87171" /> Chưa đóng {selectedMember.unpaidCount} trận ({formatCurrency(selectedMember.totalDebt)})
                       </div>
                       <Link
                         href={`/payments/${selectedMember.id}`}
@@ -805,7 +853,7 @@ export function LuckyWheelClient({ currentUser, loggedInMemberId }: LuckyWheelCl
                           whiteSpace: "nowrap",
                         }}
                       >
-                        Nộp hèo ngay 💸 <ArrowRight size={12} />
+                        Đóng tiền ngay 💸 <ArrowRight size={12} />
                       </Link>
                     </div>
                   ) : selectedMember.spinsAvailable > 0 ? (
@@ -819,7 +867,7 @@ export function LuckyWheelClient({ currentUser, loggedInMemberId }: LuckyWheelCl
                       }}
                     >
                       <div style={{ fontWeight: 700, display: "flex", alignItems: "center", gap: "6px" }}>
-                        <CheckCircle size={14} color="#4ade80" /> Sạch hèo rùi · Còn {selectedMember.spinsAvailable} lượt quẩy 🎟️
+                        <CheckCircle size={14} color="#4ade80" /> Đã đóng đủ tiền · Còn {selectedMember.spinsAvailable} lượt quẩy 🎟️
                       </div>
                     </div>
                   ) : null}
@@ -850,15 +898,13 @@ export function LuckyWheelClient({ currentUser, loggedInMemberId }: LuckyWheelCl
               >
                 {isSpinning
                   ? "ĐANG QUAY LẮC LƯ..."
-                  : isGuest
-                  ? "ĐĂNG NHẬP ĐỂ QUẨY 🤙"
-                  : !canOperateSpin
-                  ? "QUAY NICK MÌNH THUI 😆"
                   : isUnpaid
-                  ? "CHƯA NỘP HÈO 💸"
-                  : !isOutOfSpins && selectedMember
+                  ? "CHƯA ĐÓNG TIỀN QUỸ 💸"
+                  : isOutOfSpins
+                  ? "HẾT LƯỢT RÙI, TRẬN SAU GỠ 🔥"
+                  : selectedMember
                   ? `🎰 QUAY LUN (${selectedMember.spinsAvailable} lượt)`
-                  : "HẾT LƯỢT RÙI, TRẬN SAU GỠ 🔥"}
+                  : "CHỌN THÀNH VIÊN ĐỂ QUAY"}
               </button>
             </div>
           </div>

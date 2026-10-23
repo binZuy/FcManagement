@@ -2,8 +2,8 @@ import { prisma } from "@/lib/prisma";
 import { RecordStatus } from "@prisma/client";
 
 /**
- * Kiểm tra xem thành viên sau khi thanh toán có còn nợ trận nào không.
- * Nếu đã thanh toán sạch (0 khoản nợ) -> Thưởng 1 lượt quay may mắn!
+ * Kiểm tra xem thành viên sau khi thanh toán có còn trận nào chưa đóng không.
+ * Nếu đã thanh toán đủ (0 trận chưa đóng) -> Thưởng 1 lượt quay may mắn!
  */
 export async function checkAndAwardCleanPaymentSpin(memberId: string): Promise<boolean> {
   try {

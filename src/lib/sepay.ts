@@ -243,7 +243,7 @@ export async function processSepayTransaction(
       }),
     ]);
 
-    // Thưởng lượt quay may mắn nếu thành viên không còn nợ trận nào
+    // Thưởng lượt quay may mắn nếu thành viên đã đóng đủ tất cả các trận
     await checkAndAwardCleanPaymentSpin(bundle.memberId);
 
     console.log(`[SePay] Khớp thành công Bundle: ${bundle.bundleCode} cho TV ${bundle.member?.code}`);
@@ -295,7 +295,7 @@ export async function processSepayTransaction(
       }),
     ]);
 
-    // Thưởng lượt quay may mắn nếu thành viên không còn nợ trận nào
+    // Thưởng lượt quay may mắn nếu thành viên đã đóng đủ tất cả các trận
     await checkAndAwardCleanPaymentSpin(member.id);
 
     console.log(`[SePay] ✅ Session matched: ${memberCode} / ${sessionCode}`);

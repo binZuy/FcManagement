@@ -39,14 +39,10 @@ export async function GET() {
   }
 }
 
-// POST /api/wheel/spin — Thực hiện trừ lượt quay và lưu phần thưởng
+// POST /api/wheel/spin — Thực hiện trừ lượt quay và lưu phần thưởng (Hỗ trợ cả Thành viên đã đăng nhập & Khách)
 export async function POST(req: NextRequest) {
   try {
     const session = await auth();
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Vui lòng đăng nhập để thực hiện quay thưởng" }, { status: 401 });
-    }
-
     const body = await req.json();
     const { memberId, prizeId, label, icon } = body;
 
@@ -54,19 +50,20 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Thiếu thông tin người quay hoặc phần thưởng" }, { status: 400 });
     }
 
-    const isAdmin = session.user.role === "ADMIN";
-
-    // Nếu không phải Admin, chỉ được quay lượt của chính mình
-    if (!isAdmin) {
-      const loggedMember = await prisma.member.findUnique({
-        where: { userId: session.user.id },
-        select: { id: true },
-      });
-      if (!loggedMember || loggedMember.id !== memberId) {
-        return NextResponse.json(
-          { error: "Bạn chỉ có thể thực hiện quay lượt của chính mình!" },
-          { status: 403 }
-        );
+    // Nếu đã đăng nhập và không phải Admin, chỉ được quay lượt của chính mình
+    if (session?.user?.id) {
+      const isAdmin = session.user.role === "ADMIN";
+      if (!isAdmin) {
+        const loggedMember = await prisma.member.findUnique({
+          where: { userId: session.user.id },
+          select: { id: true },
+        });
+        if (!loggedMember || loggedMember.id !== memberId) {
+          return NextResponse.json(
+            { error: "Bạn chỉ có thể thực hiện quay lượt của chính mình!" },
+            { status: 403 }
+          );
+        }
       }
     }
 
@@ -88,14 +85,14 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Không tìm thấy thành viên" }, { status: 404 });
     }
 
-    // 1. Kiểm tra thành viên có nợ trận đấu nào không
+    // 1. Kiểm tra thành viên có trận nào chưa đóng tiền không
     const unpaidCount = member.paymentRecords.filter(
       (r) => r.status !== RecordStatus.WAIVED && (r.amountRequired - r.amountPaid) > 0
     ).length;
 
     if (unpaidCount > 0) {
       return NextResponse.json(
-        { error: `Còn nợ hèo ${unpaidCount} trận kìa! Nộp xong mới được quẩy nha 💸` },
+        { error: `Còn ${unpaidCount} trận chưa đóng tiền nè! Đóng xong là được quẩy nha 💸` },
         { status: 400 }
       );
     }

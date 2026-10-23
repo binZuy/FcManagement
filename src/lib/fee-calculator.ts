@@ -107,11 +107,11 @@ export function getResultLabel(result: MatchResult | null): string {
 
 /**
  * Tính phí phạt nộp chậm theo quy chế FC:
- * - Khi có >= 4 trận nợ chưa thanh toán:
+ * - Khi có >= 4 trận chưa thanh toán:
  *   + Phạt cơ bản khởi điểm: +5.000 VNĐ
  *   + Cứ mỗi ngày trôi qua cộng thêm: +1.000 VNĐ / ngày
  * 
- * @param unpaidRecords - Danh sách các khoản nợ chưa thanh toán (kèm createdAt)
+ * @param unpaidRecords - Danh sách các khoản chưa thanh toán (kèm createdAt)
  */
 export function calculateLatePenalty(unpaidRecords: { createdAt: Date | string }[]): {
   isPenalized: boolean;
@@ -122,7 +122,7 @@ export function calculateLatePenalty(unpaidRecords: { createdAt: Date | string }
     return { isPenalized: false, lateFee: 0, daysLate: 0 };
   }
 
-  // Sắp xếp các khoản nợ cũ nhất trước
+  // Sắp xếp các khoản chưa thanh toán cũ nhất trước
   const sorted = [...unpaidRecords].sort(
     (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
   );

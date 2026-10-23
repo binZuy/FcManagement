@@ -135,6 +135,94 @@ export function InternalMatchPitchLineup({
     showToast.success("Đã đổi vị trí cầu thủ! 🔄");
   };
 
+  // Hoán đổi vị trí linh hoạt (cùng đội hoặc khác đội, đá chính hoặc dự bị)
+  const handleSwapPlayers = (p1Id: string, p2Id: string) => {
+    if (p1Id === p2Id) return;
+
+    // 1. Cả 2 cùng trong Đội A
+    const idxA1 = teamA.findIndex((p) => p.memberId === p1Id);
+    const idxA2 = teamA.findIndex((p) => p.memberId === p2Id);
+    if (idxA1 !== -1 && idxA2 !== -1) {
+      setTeamA((prev) => {
+        const clone = [...prev];
+        const temp = clone[idxA1];
+        clone[idxA1] = clone[idxA2];
+        clone[idxA2] = temp;
+        return clone;
+      });
+      const name1 = teamA[idxA1]?.name.split(" ").slice(-1)[0];
+      const name2 = teamA[idxA2]?.name.split(" ").slice(-1)[0];
+      showToast.success(`Đã đổi vị trí: ${name1} ⇄ ${name2}! 🔄`);
+      return;
+    }
+
+    // 2. Cả 2 cùng trong Đội B
+    const idxB1 = teamB.findIndex((p) => p.memberId === p1Id);
+    const idxB2 = teamB.findIndex((p) => p.memberId === p2Id);
+    if (idxB1 !== -1 && idxB2 !== -1) {
+      setTeamB((prev) => {
+        const clone = [...prev];
+        const temp = clone[idxB1];
+        clone[idxB1] = clone[idxB2];
+        clone[idxB2] = temp;
+        return clone;
+      });
+      const name1 = teamB[idxB1]?.name.split(" ").slice(-1)[0];
+      const name2 = teamB[idxB2]?.name.split(" ").slice(-1)[0];
+      showToast.success(`Đã đổi vị trí: ${name1} ⇄ ${name2}! 🔄`);
+      return;
+    }
+
+    // 3. Khác đội: 1 người Đội A, 1 người Đội B
+    if (idxA1 !== -1 && idxB2 !== -1) {
+      const pA = teamA[idxA1];
+      const pB = teamB[idxB2];
+      setTeamA((prev) => prev.map((p, i) => (i === idxA1 ? { ...pB, teamSide: "TEAM_A" } : p)));
+      setTeamB((prev) => prev.map((p, i) => (i === idxB2 ? { ...pA, teamSide: "TEAM_B" } : p)));
+      showToast.success(`Đã đổi ${pA.name} ⇄ ${pB.name} giữa 2 đội! 🔄`);
+      return;
+    }
+
+    if (idxB1 !== -1 && idxA2 !== -1) {
+      const pB = teamB[idxB1];
+      const pA = teamA[idxA2];
+      setTeamB((prev) => prev.map((p, i) => (i === idxB1 ? { ...pA, teamSide: "TEAM_B" } : p)));
+      setTeamA((prev) => prev.map((p, i) => (i === idxA2 ? { ...pB, teamSide: "TEAM_A" } : p)));
+      showToast.success(`Đã đổi ${pB.name} ⇄ ${pA.name} giữa 2 đội! 🔄`);
+      return;
+    }
+  };
+
+  // Di chuyển cầu thủ đến slot vị trí cụ thể trên sân
+  const handleMoveToSlot = (
+    memberId: string,
+    teamKey: "TEAM_A" | "TEAM_B",
+    targetIndex: number
+  ) => {
+    const setter = teamKey === "TEAM_A" ? setTeamA : setTeamB;
+    setter((prev) => {
+      const idx = prev.findIndex((p) => p.memberId === memberId);
+      if (idx !== -1) {
+        // Trong cùng đội: di chuyển vị trí
+        const clone = [...prev];
+        const [moved] = clone.splice(idx, 1);
+        clone.splice(Math.min(targetIndex, clone.length), 0, moved);
+        return clone;
+      } else {
+        // Từ đội khác hoặc chưa gán
+        const otherSetter = teamKey === "TEAM_A" ? setTeamB : setTeamA;
+        const player = [...teamA, ...teamB, ...unassigned].find((p) => p.memberId === memberId);
+        if (!player) return prev;
+        otherSetter((other) => other.filter((p) => p.memberId !== memberId));
+        setUnassigned((un) => un.filter((p) => p.memberId !== memberId));
+        const clone = [...prev];
+        clone.splice(Math.min(targetIndex, clone.length), 0, { ...player, teamSide: teamKey });
+        return clone;
+      }
+    });
+    showToast.success("Đã xếp vị trí vào sân! ⭐");
+  };
+
   // Đặt làm Thủ môn (slot 0)
   const setAsGoalkeeper = (teamKey: "TEAM_A" | "TEAM_B", memberId: string) => {
     const setter = teamKey === "TEAM_A" ? setTeamA : setTeamB;
@@ -312,56 +400,61 @@ export function InternalMatchPitchLineup({
   return (
     <div className="glass-card" style={{ padding: "20px", display: "flex", flexDirection: "column", gap: "16px", borderRadius: "16px" }}>
       {/* HEADER TỔNG QUAN & CONTROLS */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "12px" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "10px" }}>
         <div>
           <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
-            <h2 style={{ fontSize: "1.2rem", fontWeight: 900, color: "var(--card-foreground)", display: "flex", alignItems: "center", gap: "6px" }}>
-              ⚽ Sơ Đồ Chiến Thuật Sân 7
+            <h2 style={{ fontSize: "1.15rem", fontWeight: 900, color: "var(--card-foreground)", display: "flex", alignItems: "center", gap: "6px" }}>
+              ⚽ Sơ Đồ Chiến Thuật
             </h2>
             <span style={{ fontSize: "0.72rem", background: "rgba(34,197,94,0.15)", color: "#4ade80", padding: "2px 8px", borderRadius: "999px", fontWeight: 800 }}>
-              {teamA.length} vs {teamB.length} cầu thủ
+              {teamA.length} vs {teamB.length} người
+            </span>
+            <span style={{ fontSize: "0.72rem", background: "rgba(59,130,246,0.15)", color: "#60a5fa", padding: "2px 8px", borderRadius: "999px", fontWeight: 800 }}>
+              📐 Sơ đồ 2-3-1 (Chuẩn Sân 7)
             </span>
           </div>
-          <p style={{ fontSize: "0.78rem", color: "var(--muted-foreground)", marginTop: "2px" }}>
-            Sơ đồ Sân 7 chuẩn VN · Chạm cầu thủ để chuyển đội, đổi vị trí hoặc thay người 📱
+          <p style={{ fontSize: "0.75rem", color: "var(--muted-foreground)", marginTop: "3px" }}>
+            Chạm cầu thủ hoặc kéo thả để đổi vị trí, thay người vào sân ⚡
           </p>
         </div>
 
-        {/* NÚT THAO TÁC NHANH */}
-        <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+        {/* NÚT THAO TÁC NHANH (TỐI ƯU MOBILE) */}
+        <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
           {/* Switcher: Mặt Sân vs Danh Sách */}
-          <div style={{ display: "flex", background: "rgba(255,255,255,0.06)", borderRadius: "8px", padding: "3px" }}>
+          <div style={{ display: "flex", background: "rgba(255,255,255,0.06)", borderRadius: "8px", padding: "2px" }}>
             <button
               type="button"
               onClick={() => setViewMode("pitch")}
               style={{
-                padding: "5px 12px",
+                padding: "4px 10px",
                 borderRadius: "6px",
                 border: "none",
                 background: viewMode === "pitch" ? "var(--primary)" : "transparent",
                 color: viewMode === "pitch" ? "#052e16" : "var(--card-foreground)",
-                fontWeight: 700,
-                fontSize: "0.78rem",
+                fontWeight: 800,
+                fontSize: "0.76rem",
                 cursor: "pointer",
+                whiteSpace: "nowrap",
               }}
             >
-              🏟️ Mặt Sân
+              🏟️ Sân cỏ
             </button>
             <button
               type="button"
               onClick={() => setViewMode("board")}
               style={{
-                padding: "5px 12px",
+                padding: "4px 10px",
                 borderRadius: "6px",
                 border: "none",
                 background: viewMode === "board" ? "var(--primary)" : "transparent",
                 color: viewMode === "board" ? "#052e16" : "var(--card-foreground)",
-                fontWeight: 700,
-                fontSize: "0.78rem",
+                fontWeight: 800,
+                fontSize: "0.76rem",
                 cursor: "pointer",
+                whiteSpace: "nowrap",
               }}
             >
-              📋 Danh Sách
+              📋 Danh sách
             </button>
           </div>
 
@@ -369,29 +462,29 @@ export function InternalMatchPitchLineup({
             type="button"
             onClick={handleRandomSplit}
             className="btn btn-secondary"
-            style={{ padding: "6px 12px", fontSize: "0.78rem", display: "flex", alignItems: "center", gap: "4px" }}
+            style={{ padding: "5px 10px", fontSize: "0.76rem", display: "flex", alignItems: "center", gap: "4px", whiteSpace: "nowrap" }}
             title="Tự động chia ngẫu nhiên 2 đội đều nhau"
           >
-            <Shuffle size={14} color="#facc15" /> Random 🎲
+            <Shuffle size={13} color="#facc15" /> Random 🎲
           </button>
 
           <button
             type="button"
             onClick={handleSwapTeams}
             className="btn btn-secondary"
-            style={{ padding: "6px 10px", fontSize: "0.78rem" }}
+            style={{ padding: "5px 8px", fontSize: "0.76rem" }}
             title="Đổi sân 2 đội"
           >
-            <ArrowLeftRight size={14} />
+            <ArrowLeftRight size={13} />
           </button>
 
           <button
             type="button"
             onClick={() => setShowAddModal(true)}
             className="btn btn-secondary"
-            style={{ padding: "6px 12px", fontSize: "0.78rem", display: "flex", alignItems: "center", gap: "4px" }}
+            style={{ padding: "5px 10px", fontSize: "0.76rem", display: "flex", alignItems: "center", gap: "4px", whiteSpace: "nowrap" }}
           >
-            <Plus size={14} /> Thêm người
+            <Plus size={13} /> Thêm người
           </button>
 
           <button
@@ -399,98 +492,54 @@ export function InternalMatchPitchLineup({
             onClick={handleSaveTeams}
             disabled={isPending}
             className="btn btn-primary"
-            style={{ padding: "6px 16px", fontSize: "0.82rem", fontWeight: 800, display: "flex", alignItems: "center", gap: "6px" }}
+            style={{ padding: "5px 14px", fontSize: "0.78rem", fontWeight: 800, display: "flex", alignItems: "center", gap: "5px", whiteSpace: "nowrap" }}
           >
-            {isPending ? <RefreshCw size={14} className="animate-spin" /> : <Save size={14} />}
+            {isPending ? <RefreshCw size={13} className="animate-spin" /> : <Save size={13} />}
             {isPending ? "Đang lưu..." : "Lưu Đội Hình 💾"}
           </button>
         </div>
       </div>
 
-      {/* THANH CHỌN CHIẾN THUẬT SÂN 7 & TÊN 2 ĐỘI */}
-      <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-        {/* Selector Formation Sân 7 */}
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "10px", background: "rgba(30,41,59,0.5)", padding: "10px 14px", borderRadius: "10px", border: "1px solid rgba(255,255,255,0.08)" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-            <span style={{ fontSize: "0.8rem", fontWeight: 800, color: "var(--card-foreground)" }}>
-              📐 Sơ đồ Sân 7:
+      {/* BANNER TÊN 2 ĐỘI */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: "rgba(15,23,42,0.6)", padding: "8px 12px", borderRadius: "10px", border: "1px solid rgba(255,255,255,0.06)", flexWrap: "wrap", gap: "8px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "8px", overflow: "hidden", whiteSpace: "nowrap" }}>
+          <div style={{ width: "12px", height: "12px", borderRadius: "4px", background: "#3b82f6", boxShadow: "0 0 8px rgba(59,130,246,0.6)", flexShrink: 0 }} />
+          {isEditingNames ? (
+            <input
+              type="text"
+              value={teamAName}
+              onChange={(e) => setTeamAName(e.target.value)}
+              style={{ padding: "3px 8px", fontSize: "0.8rem", background: "rgba(0,0,0,0.4)", border: "1px solid #3b82f6", borderRadius: "6px", color: "white", fontWeight: 700, maxWidth: "140px" }}
+            />
+          ) : (
+            <span style={{ fontWeight: 800, fontSize: "0.85rem", color: "#60a5fa", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {teamAName} ({teamA.length})
             </span>
-            <div style={{ display: "flex", gap: "6px" }}>
-              {(Object.keys(FORMATIONS_7) as Formation7Id[]).map((fKey) => {
-                const f = FORMATIONS_7[fKey];
-                const active = formation === fKey;
-                return (
-                  <button
-                    key={fKey}
-                    type="button"
-                    onClick={() => setFormation(fKey)}
-                    style={{
-                      padding: "4px 10px",
-                      borderRadius: "6px",
-                      border: active ? "1.5px solid var(--primary)" : "1px solid rgba(255,255,255,0.12)",
-                      background: active ? "rgba(34,197,94,0.18)" : "rgba(15,23,42,0.4)",
-                      color: active ? "#4ade80" : "var(--muted-foreground)",
-                      fontWeight: 800,
-                      fontSize: "0.76rem",
-                      cursor: "pointer",
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "4px",
-                    }}
-                  >
-                    <span>{f.name}</span>
-                    <span style={{ fontSize: "0.65rem", opacity: 0.8 }}>({f.tag})</span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-          <span style={{ fontSize: "0.72rem", color: "var(--muted-foreground)", fontStyle: "italic" }}>
-            {FORMATIONS_7[formation].description}
-          </span>
+          )}
         </div>
 
-        {/* Banner 2 Đội */}
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: "rgba(15,23,42,0.6)", padding: "10px 14px", borderRadius: "10px", border: "1px solid rgba(255,255,255,0.06)" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-            <div style={{ width: "14px", height: "14px", borderRadius: "4px", background: "#3b82f6", boxShadow: "0 0 8px rgba(59,130,246,0.6)" }} />
-            {isEditingNames ? (
-              <input
-                type="text"
-                value={teamAName}
-                onChange={(e) => setTeamAName(e.target.value)}
-                style={{ padding: "4px 8px", fontSize: "0.82rem", background: "rgba(0,0,0,0.4)", border: "1px solid #3b82f6", borderRadius: "6px", color: "white", fontWeight: 700 }}
-              />
-            ) : (
-              <span style={{ fontWeight: 800, fontSize: "0.9rem", color: "#60a5fa" }}>
-                {teamAName} ({teamA.length} người)
-              </span>
-            )}
-          </div>
+        <button
+          type="button"
+          onClick={() => setIsEditingNames(!isEditingNames)}
+          style={{ background: "transparent", border: "none", color: "var(--muted-foreground)", fontSize: "0.72rem", cursor: "pointer", textDecoration: "underline", whiteSpace: "nowrap" }}
+        >
+          {isEditingNames ? "Xong" : "Đổi tên"}
+        </button>
 
-          <button
-            type="button"
-            onClick={() => setIsEditingNames(!isEditingNames)}
-            style={{ background: "transparent", border: "none", color: "var(--muted-foreground)", fontSize: "0.72rem", cursor: "pointer", textDecoration: "underline" }}
-          >
-            {isEditingNames ? "Xong" : "Đổi tên đội"}
-          </button>
-
-          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-            {isEditingNames ? (
-              <input
-                type="text"
-                value={teamBName}
-                onChange={(e) => setTeamBName(e.target.value)}
-                style={{ padding: "4px 8px", fontSize: "0.82rem", background: "rgba(0,0,0,0.4)", border: "1px solid #facc15", borderRadius: "6px", color: "white", fontWeight: 700, textAlign: "right" }}
-              />
-            ) : (
-              <span style={{ fontWeight: 800, fontSize: "0.9rem", color: "#facc15" }}>
-                {teamBName} ({teamB.length} người)
-              </span>
-            )}
-            <div style={{ width: "14px", height: "14px", borderRadius: "4px", background: "#facc15", boxShadow: "0 0 8px rgba(250,204,21,0.6)" }} />
-          </div>
+        <div style={{ display: "flex", alignItems: "center", gap: "8px", overflow: "hidden", whiteSpace: "nowrap" }}>
+          {isEditingNames ? (
+            <input
+              type="text"
+              value={teamBName}
+              onChange={(e) => setTeamBName(e.target.value)}
+              style={{ padding: "3px 8px", fontSize: "0.8rem", background: "rgba(0,0,0,0.4)", border: "1px solid #facc15", borderRadius: "6px", color: "white", fontWeight: 700, textAlign: "right", maxWidth: "140px" }}
+            />
+          ) : (
+            <span style={{ fontWeight: 800, fontSize: "0.85rem", color: "#facc15", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {teamBName} ({teamB.length})
+            </span>
+          )}
+          <div style={{ width: "12px", height: "12px", borderRadius: "4px", background: "#facc15", boxShadow: "0 0 8px rgba(250,204,21,0.6)", flexShrink: 0 }} />
         </div>
       </div>
 
@@ -504,6 +553,8 @@ export function InternalMatchPitchLineup({
           benchA={benchA}
           startersB={startersB}
           benchB={benchB}
+          onSwapPlayers={handleSwapPlayers}
+          onMoveToSlot={handleMoveToSlot}
           onSelectPlayer={setSelectedPlayer}
           onSelectEmptySlot={setActiveEmptySlot}
         />

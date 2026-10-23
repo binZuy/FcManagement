@@ -66,7 +66,7 @@ export default async function PaymentsPage() {
         <div className="stats-grid">
           <div className="stat-card">
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
-              <span style={{ fontSize: "0.82rem", fontWeight: 600, color: "var(--muted-foreground)" }}>[Admin] Tổng nợ</span>
+              <span style={{ fontSize: "0.82rem", fontWeight: 600, color: "var(--muted-foreground)" }}>[Admin] Tổng chưa đóng</span>
               <div style={{ width: 34, height: 34, borderRadius: 8, background: "rgba(239, 68, 68, 0.15)", display: "flex", alignItems: "center", justifyContent: "center" }}>
                 <Wallet size={18} color="#f87171" />
               </div>
@@ -105,7 +105,7 @@ export default async function PaymentsPage() {
               {doneMembers}
             </div>
             <div style={{ fontSize: "0.72rem", color: "#4ade80", marginTop: "4px" }}>
-              Thành viên không còn nợ
+              Thành viên đã đóng đủ
             </div>
           </div>
         </div>
@@ -113,7 +113,7 @@ export default async function PaymentsPage() {
 
 
 
-      {/* Members List (Chỉ hiển thị thành viên nợ tiền) */}
+      {/* Members List (Chỉ hiển thị thành viên chưa đóng tiền) */}
       <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
         {debtMembers.length === 0 && (
           <div className="glass-card" style={{ padding: "60px 24px", textAlign: "center" }}>
@@ -122,7 +122,7 @@ export default async function PaymentsPage() {
               Tất cả thành viên đã hoàn thành đóng phí!
             </div>
             <div style={{ fontSize: "0.85rem", color: "var(--muted-foreground)" }}>
-              Không có khoản nợ nào cần thu tại thời điểm hiện tại.
+              Không còn khoản nào cần thu tại thời điểm hiện tại.
             </div>
           </div>
         )}

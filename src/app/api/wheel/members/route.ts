@@ -36,7 +36,7 @@ export async function GET() {
 
         let spins = m.spinsAvailable;
 
-        // Nếu thành viên sạch nợ hoàn toàn, nhưng spins = 0 và chưa từng quay lần nào -> tặng 1 lượt khởi đầu
+        // Nếu thành viên đã đóng đủ tiền hoàn toàn, nhưng spins = 0 và chưa từng quay lần nào -> tặng 1 lượt khởi đầu
         if (unpaidCount === 0 && spins === 0) {
           const totalRewardsCount = await prisma.memberReward.count({ where: { memberId: m.id } });
           if (totalRewardsCount === 0 && m.paymentRecords.length > 0) {
