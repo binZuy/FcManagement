@@ -185,9 +185,6 @@ export function PitchView({
               <span style={{ fontSize: "0.78rem", fontWeight: 800, color: "#fef08a" }}>
                 Đang chọn: <strong style={{ color: "white" }}>{activeSwapPlayer.player.name}</strong>
               </span>
-              <span style={{ fontSize: "0.68rem", color: "#fde047", marginLeft: "6px" }}>
-                (Chạm cầu thủ khác để đổi vị trí, hoặc chạm vị trí trên sân để vào đá)
-              </span>
             </div>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: "6px", flexShrink: 0 }}>
@@ -276,9 +273,6 @@ export function PitchView({
                 {benchA.length}
               </span>
             </div>
-            <span style={{ fontSize: "0.66rem", color: "var(--muted-foreground)", fontWeight: 600 }}>
-              Chạm hoặc kéo vào sân để thay người
-            </span>
           </div>
 
           <div
@@ -921,9 +915,6 @@ export function PitchView({
                 {benchB.length}
               </span>
             </div>
-            <span style={{ fontSize: "0.66rem", color: "var(--muted-foreground)", fontWeight: 600 }}>
-              Chạm hoặc kéo vào sân để thay người
-            </span>
           </div>
 
           <div

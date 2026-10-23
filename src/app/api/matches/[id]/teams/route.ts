@@ -16,12 +16,13 @@ export async function POST(req: NextRequest, { params }: Params) {
 
     const { id: matchId } = await params;
     const body = await req.json();
-    const { teamA, teamB, unassigned, teamAName, teamBName } = body as {
+    const { teamA, teamB, unassigned, teamAName, teamBName, removedMemberIds } = body as {
       teamA?: string[]; // memberIds
       teamB?: string[]; // memberIds
       unassigned?: string[]; // memberIds
       teamAName?: string;
       teamBName?: string;
+      removedMemberIds?: string[];
     };
 
     const match = await prisma.matchSession.findUnique({
@@ -80,11 +81,28 @@ export async function POST(req: NextRequest, { params }: Params) {
 
     // 4. Cập nhật danh sách chưa chia (hoặc dự bị)
     if (Array.isArray(unassigned)) {
-      for (const memberId of unassigned) {
-        if (memberId.startsWith("guest_")) continue;
+       for (const memberId of unassigned) {
+         if (memberId.startsWith("guest_")) continue;
+         await prisma.matchAttendance.updateMany({
+           where: { matchId, memberId },
+           data: { teamSide: null },
+         });
+       }
+     }
+
+    // 5. Cập nhật các thành viên bị xóa khỏi trận đấu -> Đặt lại vắng mặt (ABSENT)
+    if (Array.isArray(removedMemberIds) && removedMemberIds.length > 0) {
+      const validIds = removedMemberIds.filter((id) => !id.startsWith("guest_"));
+      if (validIds.length > 0) {
         await prisma.matchAttendance.updateMany({
-          where: { matchId, memberId },
-          data: { teamSide: null },
+          where: {
+            matchId,
+            memberId: { in: validIds },
+          },
+          data: {
+            status: AttendStatus.ABSENT,
+            teamSide: null,
+          },
         });
       }
     }

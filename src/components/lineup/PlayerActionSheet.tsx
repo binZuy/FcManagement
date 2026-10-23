@@ -1,5 +1,7 @@
 "use client";
 
+import { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import { PitchPlayer } from "./types";
 
@@ -23,6 +25,7 @@ interface PlayerActionSheetProps {
     fromTeam: "TEAM_A" | "TEAM_B" | "UNASSIGNED",
     toTeam: "TEAM_A" | "TEAM_B" | "UNASSIGNED"
   ) => void;
+  onRemoveFromMatch?: (player: PitchPlayer) => void;
 }
 
 export function PlayerActionSheet({
@@ -36,23 +39,43 @@ export function PlayerActionSheet({
   onPromoteToStarter,
   onSendToBench,
   onMovePlayer,
+  onRemoveFromMatch,
 }: PlayerActionSheetProps) {
+  const [mounted, setMounted] = useState(false);
   const { player, currentTeam, isStarter } = selectedPlayer;
   const isTeamAssigned = currentTeam === "TEAM_A" || currentTeam === "TEAM_B";
 
-  return (
+  useEffect(() => {
+    setMounted(true);
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = originalOverflow;
+    };
+  }, []);
+
+  if (!mounted || typeof document === "undefined") return null;
+
+  return createPortal(
     <div
       onClick={onClose}
       style={{
         position: "fixed",
-        inset: 0,
-        background: "rgba(0,0,0,0.68)",
-        backdropFilter: "blur(4px)",
-        zIndex: 100,
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        width: "100vw",
+        height: "100dvh",
+        background: "rgba(0,0,0,0.82)",
+        backdropFilter: "blur(6px)",
+        WebkitBackdropFilter: "blur(6px)",
+        zIndex: 99999,
         display: "flex",
-        alignItems: "flex-end",
+        alignItems: "center",
         justifyContent: "center",
         padding: "16px",
+        boxSizing: "border-box",
       }}
     >
       <div
@@ -71,28 +94,25 @@ export function PlayerActionSheet({
           boxShadow: "0 10px 40px rgba(0,0,0,0.85)",
         }}
       >
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-            <span style={{ fontSize: "1.4rem" }}>{player.isGuest ? "👥" : "⚽"}</span>
-            <div>
-              <div style={{ fontWeight: 800, fontSize: "1rem", color: "#f8fafc" }}>
-                {player.name} {player.jerseyNumber ? `(#${player.jerseyNumber})` : ""}
-              </div>
-              <div style={{ fontSize: "0.72rem", color: "var(--muted-foreground)" }}>
-                Đang ở: {currentTeam === "TEAM_A" ? teamAName : currentTeam === "TEAM_B" ? teamBName : "Chưa chia"}
-                {isStarter ? " · Đang đá chính" : " · Ghế dự bị"}
-                {player.isGuest && (
-                  <span style={{ display: "block", color: "#c084fc", fontWeight: 700, marginTop: "2px" }}>
-                    👥 Bạn đi cùng của {player.hostName || "thành viên"} (Ưu tiên cùng đội)
-                  </span>
-                )}
-              </div>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+          <div>
+            <div style={{ fontWeight: 800, fontSize: "1rem", color: "#f8fafc" }}>
+              {player.name} {player.jerseyNumber ? `(#${player.jerseyNumber})` : ""}
+            </div>
+            <div style={{ fontSize: "0.74rem", color: "var(--muted-foreground)", marginTop: "2px" }}>
+              {currentTeam === "TEAM_A" ? teamAName : currentTeam === "TEAM_B" ? teamBName : "Chưa chia"}
+              {isStarter ? " · Đá chính" : " · Dự bị"}
+              {player.isGuest && (
+                <span style={{ display: "block", color: "#c084fc", fontWeight: 700, marginTop: "2px" }}>
+                  Bạn {player.hostName || "thành viên"}
+                </span>
+              )}
             </div>
           </div>
           <button
             type="button"
             onClick={onClose}
-            style={{ background: "transparent", border: "none", color: "var(--muted-foreground)", cursor: "pointer" }}
+            style={{ background: "transparent", border: "none", color: "var(--muted-foreground)", cursor: "pointer", padding: "4px" }}
           >
             <X size={18} />
           </button>
@@ -114,13 +134,10 @@ export function PlayerActionSheet({
                 fontWeight: 800,
                 fontSize: "0.85rem",
                 cursor: "pointer",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: "6px",
+                textAlign: "center",
               }}
             >
-              🧤 Bắt gôn (Đặt làm Thủ Môn GK)
+              Làm thủ môn (GK)
             </button>
           )}
 
@@ -128,7 +145,7 @@ export function PlayerActionSheet({
           {isTeamAssigned && (
             <div>
               <div style={{ fontSize: "0.72rem", fontWeight: 800, color: "var(--muted-foreground)", marginBottom: "4px" }}>
-                🔄 Hoán đổi vị trí với đồng đội:
+                Đổi vị trí:
               </div>
               <div style={{ display: "flex", gap: "6px", overflowX: "auto", paddingBottom: "4px" }}>
                 {teammates
@@ -150,7 +167,7 @@ export function PlayerActionSheet({
                         cursor: "pointer",
                       }}
                     >
-                      ⇄ {p.name.split(" ").slice(-1)[0]}
+                      {p.name.split(" ").slice(-1)[0]}
                     </button>
                   ))}
               </div>
@@ -171,13 +188,10 @@ export function PlayerActionSheet({
                 fontWeight: 800,
                 fontSize: "0.85rem",
                 cursor: "pointer",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: "6px",
+                textAlign: "center",
               }}
             >
-              ⭐ Đưa vào sân đá chính
+              Vào đá chính
             </button>
           )}
 
@@ -195,9 +209,10 @@ export function PlayerActionSheet({
                 fontWeight: 700,
                 fontSize: "0.82rem",
                 cursor: "pointer",
+                textAlign: "center",
               }}
             >
-              🪑 Xuống ghế dự bị
+              Xuống dự bị
             </button>
           )}
 
@@ -215,13 +230,10 @@ export function PlayerActionSheet({
                 fontWeight: 800,
                 fontSize: "0.85rem",
                 cursor: "pointer",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: "6px",
+                textAlign: "center",
               }}
             >
-              🔵 Chuyển sang {teamAName}
+              Sang {teamAName}
             </button>
           )}
 
@@ -238,13 +250,10 @@ export function PlayerActionSheet({
                 fontWeight: 800,
                 fontSize: "0.85rem",
                 cursor: "pointer",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: "6px",
+                textAlign: "center",
               }}
             >
-              🟡 Chuyển sang {teamBName}
+              Sang {teamBName}
             </button>
           )}
 
@@ -261,13 +270,35 @@ export function PlayerActionSheet({
                 fontWeight: 600,
                 fontSize: "0.78rem",
                 cursor: "pointer",
+                textAlign: "center",
               }}
             >
-              ⏳ Cho ra ngoài danh sách (Chưa chia đội)
+              Cho ra dự bị chung
+            </button>
+          )}
+
+          {onRemoveFromMatch && (
+            <button
+              type="button"
+              onClick={() => onRemoveFromMatch(player)}
+              style={{
+                padding: "8px",
+                borderRadius: "8px",
+                border: "1px solid rgba(239,68,68,0.3)",
+                background: "rgba(239,68,68,0.1)",
+                color: "#f87171",
+                fontWeight: 700,
+                fontSize: "0.78rem",
+                cursor: "pointer",
+                textAlign: "center",
+              }}
+            >
+              Xóa khỏi trận (Vắng)
             </button>
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

@@ -57,12 +57,29 @@ export function InternalMatchPitchLineup({
 
   // Modals & Action Sheet
   const [showAddModal, setShowAddModal] = useState(false);
+  const [removedMemberIds, setRemovedMemberIds] = useState<string[]>([]);
   const [selectedPlayer, setSelectedPlayer] = useState<{
     player: PitchPlayer;
     currentTeam: "TEAM_A" | "TEAM_B" | "UNASSIGNED";
     slotIndex?: number;
     isStarter?: boolean;
   } | null>(null);
+
+  const handleRemoveFromMatch = (player: PitchPlayer) => {
+    setTeamA((prev) => prev.filter((p) => p.memberId !== player.memberId));
+    setTeamB((prev) => prev.filter((p) => p.memberId !== player.memberId));
+    setUnassigned((prev) => prev.filter((p) => p.memberId !== player.memberId));
+
+    if (!player.isGuest) {
+      setRemovedMemberIds((prev) => Array.from(new Set([...prev, player.memberId])));
+      setTeamA((prev) => prev.filter((p) => !(p.isGuest && p.hostMemberId === player.memberId)));
+      setTeamB((prev) => prev.filter((p) => !(p.isGuest && p.hostMemberId === player.memberId)));
+      setUnassigned((prev) => prev.filter((p) => !(p.isGuest && p.hostMemberId === player.memberId)));
+    }
+
+    setSelectedPlayer(null);
+    showToast.info(`Đã loại ${player.name} khỏi danh sách đá. Hãy bấm "Lưu chia đội" để đồng bộ!`);
+  };
 
   const [activeEmptySlot, setActiveEmptySlot] = useState<{
     teamSide: "TEAM_A" | "TEAM_B";
@@ -374,6 +391,7 @@ export function InternalMatchPitchLineup({
           teamA: teamA.map((p) => p.memberId),
           teamB: teamB.map((p) => p.memberId),
           unassigned: unassigned.map((p) => p.memberId),
+          removedMemberIds,
         };
 
         const res = await fetch(`/api/matches/${matchId}/teams`, {
@@ -413,9 +431,6 @@ export function InternalMatchPitchLineup({
               📐 Sơ đồ 2-3-1 (Chuẩn Sân 7)
             </span>
           </div>
-          <p style={{ fontSize: "0.75rem", color: "var(--muted-foreground)", marginTop: "3px" }}>
-            Chạm cầu thủ hoặc kéo thả để đổi vị trí, thay người vào sân ⚡
-          </p>
         </div>
 
         {/* NÚT THAO TÁC NHANH (TỐI ƯU MOBILE) */}
@@ -543,6 +558,24 @@ export function InternalMatchPitchLineup({
         </div>
       </div>
 
+      {/* BANNER KHI CHƯA CÓ CẦU THỦ NÀO */}
+      {teamA.length === 0 && teamB.length === 0 && unassigned.length === 0 && (
+        <div style={{
+          padding: "14px 16px",
+          background: "rgba(59,130,246,0.08)",
+          border: "1px dashed rgba(59,130,246,0.3)",
+          borderRadius: "12px",
+          textAlign: "center",
+        }}>
+          <p style={{ margin: 0, fontWeight: 700, fontSize: "0.85rem", color: "#60a5fa" }}>
+            ⚽ Chưa có cầu thủ nào trong trận đấu
+          </p>
+          <p style={{ margin: "4px 0 0", fontSize: "0.75rem", color: "var(--muted-foreground)" }}>
+            Bấm nút <b>"+ Thêm người"</b> ở góc trên để chọn thành viên vào sân (khi bấm <b>Lưu chia đội</b> hệ thống sẽ tự động điểm danh luôn), hoặc bạn cũng có thể điểm danh trước ở mục Điểm danh!
+          </p>
+        </div>
+      )}
+
       {/* VIEW 1: SÂN BÓNG 3D */}
       {viewMode === "pitch" && (
         <PitchView
@@ -632,6 +665,7 @@ export function InternalMatchPitchLineup({
           onPromoteToStarter={promoteToStarter}
           onSendToBench={sendToBench}
           onMovePlayer={movePlayer}
+          onRemoveFromMatch={handleRemoveFromMatch}
         />
       )}
 

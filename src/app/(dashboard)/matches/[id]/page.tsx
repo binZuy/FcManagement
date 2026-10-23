@@ -82,30 +82,18 @@ export default async function MatchDetailPage({ params }: Params) {
     }));
   }
 
-  // Check if any attended member has teamSide === "TEAM_B" (indicates historical match with split teams)
-  const hasExplicitTeamB = match.attendances.some(
-    (a) => (a.status === "ATTENDED" || a.status === "LATE") && a.teamSide === "TEAM_B"
-  );
-
   const initialPlayers: PitchPlayer[] = [];
 
   for (const a of match.attendances) {
     const isAttended = a.status === "ATTENDED" || a.status === "LATE";
-    let effectiveSide: "TEAM_A" | "TEAM_B" | null = a.teamSide as "TEAM_A" | "TEAM_B" | null;
+    // CHỈ đưa vào Lineup những thành viên CÓ MẶT tham gia trận đấu!
+    // Các thành viên vắng mặt (ABSENT), nghỉ phép (EXCUSED) hoặc chưa xác nhận không đưa vào Lineup
+    // để tránh làm tràn ngập ghế dự bị bằng những người không đi đá.
+    if (!isAttended) continue;
 
-    // For historical/completed matches:
-    // If a.teamSide wasn't explicitly saved as TEAM_A, but there are TEAM_B players in the match,
-    // then all other ATTENDED players were on TEAM_A (the old system default).
-    if (!effectiveSide && isAttended && hasExplicitTeamB) {
-      effectiveSide = "TEAM_A";
-    }
+    const effectiveSide: "TEAM_A" | "TEAM_B" | null = a.teamSide as "TEAM_A" | "TEAM_B" | null;
 
-    // If member was ABSENT or EXCUSED, they shouldn't be assigned to a team on the pitch
-    if (!isAttended) {
-      effectiveSide = null;
-    }
-
-    // 1. Thành viên chính thức
+    // 1. Thành viên chính thức có mặt
     initialPlayers.push({
       memberId: a.memberId,
       name: a.member.user.name || "Cầu thủ",
@@ -120,12 +108,12 @@ export default async function MatchDetailPage({ params }: Params) {
 
     // 2. Nếu thành viên có bạn đi cùng (guestCount > 0):
     // Tạo cầu thủ đại diện cho bạn của thành viên, LUÔN CÙNG ĐỘI VỚI THÀNH VIÊN
-    if (isAttended && a.guestCount > 0) {
+    if (a.guestCount > 0) {
       for (let g = 1; g <= a.guestCount; g++) {
         const guestName =
           a.guestCount > 1
-            ? `Bạn ${g} (${a.member.user.name || "Cầu thủ"})`
-            : `Bạn của ${a.member.user.name || "Cầu thủ"}`;
+            ? `Bạn ${a.member.user.name || "Cầu thủ"} (${g})`
+            : `Bạn ${a.member.user.name || "Cầu thủ"}`;
         initialPlayers.push({
           memberId: `guest_${a.memberId}_${g}`,
           name: guestName,

@@ -99,7 +99,7 @@ export default async function PaymentDetailPage({ params }: Params) {
       if (guestTotalFee > 0) {
         displayItems.push({
           id: record.id + "_guest",
-          name: `Bạn của ${record.member.user.name}`,
+          name: `Bạn ${record.member.user.name}`,
           isGuest: true,
           guestNote: `${guestCount} người`,
           code: record.member.code,
