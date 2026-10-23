@@ -382,3 +382,14 @@ enum BundleStatus {
   EXPIRED    // Hết hạn
   CANCELLED  // Đã huỷ
 }
+
+// ─── System Settings (Cấu hình chung hệ thống / Vòng quay) ───────────────────
+
+model SystemSetting {
+  key       String   @id // e.g. "WHEEL_OPTIONS"
+  value     Json
+  updatedAt DateTime @updatedAt
+
+  @@map("system_settings")
+}
+

@@ -2,17 +2,15 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import Link from "next/link";
-import { Settings, History, RotateCcw, Volume2, VolumeX, CheckCircle, AlertTriangle, Gift, ArrowRight, Sparkles, Plus, Trash2 } from "lucide-react";
+import { Settings, History, RotateCcw, Volume2, VolumeX, CheckCircle, AlertTriangle, Gift, ArrowRight, Sparkles, Plus, Trash2, Check, RefreshCw } from "lucide-react";
 import { showToast } from "@/components/Toast";
 import { formatCurrency } from "@/lib/utils";
-
-export interface WheelOption {
-  id: string;
-  label: string;
-  icon: string;
-  color: string;
-  weight: number; // Tỉ lệ % trúng ảo
-}
+import {
+  WheelOption,
+  DEFAULT_WHEEL_OPTIONS,
+  PRESET_WHEEL_COLORS,
+  PRESET_WHEEL_ICONS,
+} from "@/lib/wheelConstants";
 
 export interface WheelMember {
   id: string;
@@ -47,14 +45,16 @@ export interface SpinHistoryItem {
   createdAt: string;
 }
 
-export const DEFAULT_OPTIONS: WheelOption[] = [
-  { id: "1", label: "Được cùng đội với binzuy", icon: "👑", color: "#3b82f6", weight: 35 },
-  { id: "2", label: "Được mời nước Duy", icon: "☕", color: "#8b5cf6", weight: 20 },
-  { id: "3", label: "Đen thế lần sau nhé", icon: "😂", color: "#64748b", weight: 35 },
-  { id: "4", label: "discount 5k", icon: "💵", color: "#10b981", weight: 4.5 },
-  { id: "5", label: "được Duy mời nước", icon: "🥤", color: "#f59e0b", weight: 4.4 },
-  { id: "6", label: "jackpot free tiền sân trận sau", icon: "🎰", color: "#ef4444", weight: 0.1 },
-];
+function adjustBrightness(hex: string, percent: number): string {
+  const cleanHex = hex.replace("#", "");
+  const num = parseInt(cleanHex.length === 3 ? cleanHex.split("").map((c) => c + c).join("") : cleanHex, 16);
+  if (isNaN(num)) return hex;
+  const amt = Math.round(2.55 * percent);
+  const R = Math.min(255, Math.max(0, (num >> 16) + amt));
+  const G = Math.min(255, Math.max(0, ((num >> 8) & 0x00ff) + amt));
+  const B = Math.min(255, Math.max(0, (num & 0x0000ff) + amt));
+  return "#" + ((1 << 24) + (R << 16) + (G << 8) + B).toString(16).slice(1);
+}
 
 interface LuckyWheelClientProps {
   currentUser: {
@@ -75,8 +75,9 @@ export function LuckyWheelClient({ currentUser, loggedInMemberId }: LuckyWheelCl
   const [selectedMemberId, setSelectedMemberId] = useState<string>("");
   const [isLoadingMembers, setIsLoadingMembers] = useState<boolean>(true);
 
-  // Cấu hình options gốc
-  const [baseOptions, setBaseOptions] = useState<WheelOption[]>(DEFAULT_OPTIONS);
+  // Cấu hình options gốc từ DB
+  const [baseOptions, setBaseOptions] = useState<WheelOption[]>(DEFAULT_WHEEL_OPTIONS);
+  const [isSavingSettings, setIsSavingSettings] = useState<boolean>(false);
 
   // Vòng quay linh hoạt: nếu <= 6 ô thì nhân đôi thành 2N ô đối xứng, nếu > 6 ô thì hiển thị N ô
   const wheelSlices = baseOptions.length <= 6 ? [...baseOptions, ...baseOptions] : [...baseOptions];
@@ -133,20 +134,27 @@ export function LuckyWheelClient({ currentUser, loggedInMemberId }: LuckyWheelCl
     }
   }, []);
 
+  // Lấy cấu hình vòng quay từ Database
+  const fetchWheelSettings = useCallback(async () => {
+    try {
+      const res = await fetch("/api/wheel/settings");
+      const data = await res.json();
+      if (data.success && Array.isArray(data.options) && data.options.length > 0) {
+        setBaseOptions(data.options);
+      } else {
+        setBaseOptions(DEFAULT_WHEEL_OPTIONS);
+      }
+    } catch (e) {
+      console.error("Lỗi tải cấu hình vòng quay:", e);
+      setBaseOptions(DEFAULT_WHEEL_OPTIONS);
+    }
+  }, []);
+
   useEffect(() => {
     fetchMembers();
     fetchHistory();
-
-    // Load options (v3)
-    const savedOptions = localStorage.getItem("fc_wheel_options_v3");
-    if (savedOptions) {
-      try {
-        setBaseOptions(JSON.parse(savedOptions));
-      } catch (e) {
-        console.error(e);
-      }
-    }
-  }, [fetchMembers, fetchHistory]);
+    fetchWheelSettings();
+  }, [fetchMembers, fetchHistory, fetchWheelSettings]);
 
   const handleSelectMember = (memberId: string) => {
     setSelectedMemberId(memberId);
@@ -226,87 +234,139 @@ export function LuckyWheelClient({ currentUser, loggedInMemberId }: LuckyWheelCl
 
     ctx.clearRect(0, 0, size, size);
 
-    // Vẽ viền kim loại vàng bên ngoài
+    // 1. Viền ngoài kim loại đa tầng sang trọng (Champagne Gold Metallic Rim)
+    const rimGrad = ctx.createLinearGradient(0, 0, size, size);
+    rimGrad.addColorStop(0, "#d97706");
+    rimGrad.addColorStop(0.25, "#fef08a");
+    rimGrad.addColorStop(0.5, "#b45309");
+    rimGrad.addColorStop(0.75, "#fde047");
+    rimGrad.addColorStop(1, "#78350f");
+
+    ctx.save();
     ctx.beginPath();
-    ctx.arc(center, center, radius + 10, 0, 2 * Math.PI);
-    ctx.fillStyle = "#ca8a04";
+    ctx.arc(center, center, radius + 11, 0, 2 * Math.PI);
+    ctx.fillStyle = rimGrad;
+    ctx.shadowColor = "rgba(0, 0, 0, 0.7)";
+    ctx.shadowBlur = 10;
+    ctx.fill();
+    ctx.restore();
+
+    // Rãnh sâu đen Obsidian viền trong
+    ctx.beginPath();
+    ctx.arc(center, center, radius + 4.5, 0, 2 * Math.PI);
+    ctx.fillStyle = "#090d16";
     ctx.fill();
 
+    // Viền kim loại mảnh viền ngoài múi
     ctx.beginPath();
-    ctx.arc(center, center, radius + 6, 0, 2 * Math.PI);
-    ctx.fillStyle = "#facc15";
-    ctx.fill();
+    ctx.arc(center, center, radius + 1, 0, 2 * Math.PI);
+    ctx.strokeStyle = "rgba(250, 204, 21, 0.6)";
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
 
-    ctx.beginPath();
-    ctx.arc(center, center, radius + 3, 0, 2 * Math.PI);
-    ctx.fillStyle = "#0f172a";
-    ctx.fill();
-
-    // Vẽ 12 ô màu xen kẽ
+    // 2. Vẽ từng múi với Radial Gradient 3D
     wheelSlices.forEach((slice, i) => {
       const startAngle = i * sliceAngle;
       const endAngle = startAngle + sliceAngle;
+      const midAngle = startAngle + sliceAngle / 2;
 
+      ctx.save();
       ctx.beginPath();
       ctx.moveTo(center, center);
       ctx.arc(center, center, radius, startAngle, endAngle);
       ctx.closePath();
 
-      ctx.fillStyle = slice.color;
+      // Gradient 3D từ tâm ra rìa tạo chiều sâu
+      const edgeX = center + radius * Math.cos(midAngle);
+      const edgeY = center + radius * Math.sin(midAngle);
+      const sliceGrad = ctx.createLinearGradient(center, center, edgeX, edgeY);
+      
+      sliceGrad.addColorStop(0, adjustBrightness(slice.color, -28));
+      sliceGrad.addColorStop(0.65, slice.color);
+      sliceGrad.addColorStop(1, adjustBrightness(slice.color, 18));
+
+      ctx.fillStyle = sliceGrad;
       ctx.fill();
 
+      // Viền múi mạ vàng tinh xảo
       ctx.lineWidth = 1.5;
-      ctx.strokeStyle = "rgba(255, 255, 255, 0.25)";
+      ctx.strokeStyle = "rgba(250, 204, 21, 0.4)";
       ctx.stroke();
 
       // Vẽ chữ & Icon
-      ctx.save();
       ctx.translate(center, center);
-      ctx.rotate(startAngle + sliceAngle / 2);
+      ctx.rotate(midAngle);
       ctx.textAlign = "right";
-      ctx.fillStyle = "#ffffff";
+      ctx.fillStyle = "#f8fafc";
       ctx.font = "bold 11px system-ui, -apple-system, sans-serif";
-      ctx.shadowColor = "rgba(0,0,0,0.8)";
-      ctx.shadowBlur = 4;
+      ctx.shadowColor = "rgba(0,0,0,0.9)";
+      ctx.shadowBlur = 5;
 
       const labelText = slice.label.length > 15 ? slice.label.slice(0, 13) + ".." : slice.label;
-      ctx.fillText(`${slice.icon} ${labelText}`, radius - 14, 4);
+      ctx.fillText(`${slice.icon} ${labelText}`, radius - 15, 4);
 
       ctx.restore();
     });
 
-    // Vẽ tâm vòng quay (Hub)
-    ctx.beginPath();
-    ctx.arc(center, center, 28, 0, 2 * Math.PI);
-    ctx.fillStyle = "#0f172a";
-    ctx.fill();
-    ctx.lineWidth = 3;
-    ctx.strokeStyle = "#facc15";
-    ctx.stroke();
-
-    ctx.beginPath();
-    ctx.arc(center, center, 14, 0, 2 * Math.PI);
-    ctx.fillStyle = "#eab308";
-    ctx.fill();
-
-    ctx.fillStyle = "#0f172a";
-    ctx.font = "bold 10px sans-serif";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText("SPIN", center, center);
-
-    // Vẽ các chấm đèn LED nhỏ quanh viền
+    // 3. Đèn LED ngọc trai phát sáng quanh viền (Glowing Jewel Pins)
     const dotCount = 24;
     for (let d = 0; d < dotCount; d++) {
       const dotAngle = (d * (2 * Math.PI)) / dotCount;
-      const dotX = center + (radius + 8) * Math.cos(dotAngle);
-      const dotY = center + (radius + 8) * Math.sin(dotAngle);
+      const dotX = center + (radius + 7.5) * Math.cos(dotAngle);
+      const dotY = center + (radius + 7.5) * Math.sin(dotAngle);
 
+      ctx.save();
       ctx.beginPath();
-      ctx.arc(dotX, dotY, 3, 0, 2 * Math.PI);
+      ctx.arc(dotX, dotY, 2.8, 0, 2 * Math.PI);
       ctx.fillStyle = d % 2 === 0 ? "#ffffff" : "#fef08a";
+      ctx.shadowColor = "rgba(250, 204, 21, 0.85)";
+      ctx.shadowBlur = 4;
       ctx.fill();
+      ctx.restore();
     }
+
+    // 4. Tâm vòng quay (Center Hub) sang trọng 3D
+    // Vành ngoài vàng bóng
+    const hubGrad = ctx.createLinearGradient(center - 28, center - 28, center + 28, center + 28);
+    hubGrad.addColorStop(0, "#fde047");
+    hubGrad.addColorStop(0.5, "#ca8a04");
+    hubGrad.addColorStop(1, "#854d0e");
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(center, center, 27, 0, 2 * Math.PI);
+    ctx.fillStyle = hubGrad;
+    ctx.shadowColor = "rgba(0,0,0,0.7)";
+    ctx.shadowBlur = 8;
+    ctx.fill();
+    ctx.restore();
+
+    // Vành trong đá đen Obsidian
+    ctx.beginPath();
+    ctx.arc(center, center, 22, 0, 2 * Math.PI);
+    ctx.fillStyle = "#090d16";
+    ctx.fill();
+    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = "rgba(250, 204, 21, 0.5)";
+    ctx.stroke();
+
+    // Lõi trung tâm vàng kim
+    const innerHub = ctx.createRadialGradient(center, center, 2, center, center, 13);
+    innerHub.addColorStop(0, "#fef08a");
+    innerHub.addColorStop(0.7, "#eab308");
+    innerHub.addColorStop(1, "#a16207");
+
+    ctx.beginPath();
+    ctx.arc(center, center, 13, 0, 2 * Math.PI);
+    ctx.fillStyle = innerHub;
+    ctx.fill();
+
+    // Chữ SPIN mạ vàng sắc nét
+    ctx.fillStyle = "#0f172a";
+    ctx.font = "900 10px system-ui, sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText("SPIN", center, center + 0.5);
   }, [baseOptions, wheelSlices]);
 
   // Thuật toán quay theo Tỉ lệ ảo
@@ -314,17 +374,28 @@ export function LuckyWheelClient({ currentUser, loggedInMemberId }: LuckyWheelCl
     if (isSpinning) return;
 
     if (!selectedMember) {
-      showToast.error("Vui lòng chọn thành viên FC trước khi quay!");
+      showToast.error("Chọn ai quay đã bạn ơi!");
+      return;
+    }
+
+    if (!currentUser) {
+      showToast.error("Đăng nhập đã rồi quẩy nha 🤙!");
+      return;
+    }
+
+    const isSelf = loggedInMemberId ? selectedMember.id === loggedInMemberId : false;
+    if (!isAdmin && !isSelf) {
+      showToast.error("Quay nick mình thui, đừng táy máy nick bạn bè 😆");
       return;
     }
 
     if (selectedMember.unpaidCount > 0) {
-      showToast.error(`Thành viên này còn ${selectedMember.unpaidCount} trận chưa đóng. Phải thanh toán hết bill mới được quay!`);
+      showToast.error(`Còn nợ hèo ${selectedMember.unpaidCount} trận kìa, đóng xong mới quay được nha 💸`);
       return;
     }
 
     if (selectedMember.spinsAvailable <= 0) {
-      showToast.error("Bạn đã hết lượt quay! Hãy đá trận tiếp theo và thanh toán đủ để nhận thêm lượt nhé!");
+      showToast.error("Hết lượt òi! Trận sau đá tốt + nộp đủ là có lượt ngay nha 🔥");
       return;
     }
 
@@ -401,6 +472,7 @@ export function LuckyWheelClient({ currentUser, loggedInMemberId }: LuckyWheelCl
             )
           );
           fetchHistory();
+          showToast.success("Ngon lành cành đào! Đã lưu phần thưởng rồi nhé 🎉");
         } else {
           showToast.error(data.error || "Lỗi khi lưu kết quả quay");
         }
@@ -410,32 +482,64 @@ export function LuckyWheelClient({ currentUser, loggedInMemberId }: LuckyWheelCl
     }, 4500);
   };
 
-  // Lưu cấu hình Admin
-  const handleSaveSettings = () => {
-    localStorage.setItem("fc_wheel_options_v3", JSON.stringify(baseOptions));
-    showToast.success("Đã lưu thiết lập tỉ lệ vòng quay!");
-    setActiveTab("wheel");
+  // Lưu cấu hình Admin vào Database
+  const handleSaveSettings = async () => {
+    try {
+      setIsSavingSettings(true);
+      const res = await fetch("/api/wheel/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ options: baseOptions }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setBaseOptions(data.options);
+        showToast.success("Lưu cấu hình vào Database chuẩn đét rồi nhé! 🔥");
+        setActiveTab("wheel");
+      } else {
+        showToast.error(data.error || "Lỗi lưu cấu hình");
+      }
+    } catch (e) {
+      showToast.error("Không lưu được cài đặt vào DB");
+    } finally {
+      setIsSavingSettings(false);
+    }
   };
 
-  const handleResetSettings = () => {
-    setBaseOptions(DEFAULT_OPTIONS);
-    localStorage.removeItem("fc_wheel_options_v3");
-    showToast.success("Đã khôi phục thiết lập mặc định!");
+  const handleResetSettings = async () => {
+    if (!confirm("Khôi phục toàn bộ cài đặt vòng quay về mặc định ban đầu?")) return;
+    try {
+      setIsSavingSettings(true);
+      const res = await fetch("/api/wheel/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ options: DEFAULT_WHEEL_OPTIONS }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setBaseOptions(data.options);
+        showToast.success("Đã reset về mặc định chuẩn xịn! 🔄");
+      }
+    } catch (e) {
+      setBaseOptions(DEFAULT_WHEEL_OPTIONS);
+    } finally {
+      setIsSavingSettings(false);
+    }
   };
 
   const handleAddOption = () => {
     if (baseOptions.length >= 16) {
-      showToast.error("Tối đa 16 phần thưởng trên vòng quay!");
+      showToast.error("Tối đa 16 phần thưởng trên vòng quay thôi nhé!");
       return;
     }
-    const colors = ["#3b82f6", "#8b5cf6", "#ec4899", "#10b981", "#f59e0b", "#ef4444", "#06b6d4", "#84cc16"];
-    const randomColor = colors[baseOptions.length % colors.length];
+    const preset = PRESET_WHEEL_COLORS[baseOptions.length % PRESET_WHEEL_COLORS.length];
     const newOpt: WheelOption = {
       id: Date.now().toString(),
       label: `Phần thưởng ${baseOptions.length + 1}`,
-      icon: "🎁",
-      color: randomColor,
+      icon: PRESET_WHEEL_ICONS[baseOptions.length % PRESET_WHEEL_ICONS.length] || "🎁",
+      color: preset.color,
       weight: 5,
+      rewardType: "NONE",
     };
     setBaseOptions((prev) => [...prev, newOpt]);
     showToast.success("Đã thêm 1 ô phần thưởng mới!");
@@ -458,6 +562,13 @@ export function LuckyWheelClient({ currentUser, loggedInMemberId }: LuckyWheelCl
     });
   };
 
+  const isGuest = !currentUser;
+  const isSelf = loggedInMemberId ? selectedMember?.id === loggedInMemberId : false;
+  const canOperateSpin = isAdmin || (!!currentUser && isSelf);
+  const isUnpaid = selectedMember ? selectedMember.unpaidCount > 0 : false;
+  const isOutOfSpins = selectedMember ? selectedMember.spinsAvailable <= 0 : false;
+  const isSpinDisabled = isSpinning || !selectedMember || isGuest || !canOperateSpin || isUnpaid || isOutOfSpins;
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "20px", maxWidth: "880px", margin: "0 auto" }}>
       {/* Header */}
@@ -467,7 +578,7 @@ export function LuckyWheelClient({ currentUser, loggedInMemberId }: LuckyWheelCl
             Vòng Quay May Mắn 🎡✨
           </h1>
           <p style={{ fontSize: "0.82rem", color: "var(--muted-foreground)" }}>
-            Đóng đủ các trận nhận ngay 1 lượt quay · Cơ hội nhận Voucher 5k & Free sân!
+            Sạch hèo là có quà · Quẩy ngay nhận Voucher 5k & Free sân cực cháy 🔥
           </p>
         </div>
 
@@ -541,32 +652,71 @@ export function LuckyWheelClient({ currentUser, loggedInMemberId }: LuckyWheelCl
               overflow: "hidden",
             }}
           >
-            {/* Kim chỉ (Pointer) ở góc 12h */}
+            {/* Vầng sáng vàng kim mờ ảo phía sau vòng quay */}
             <div
               style={{
                 position: "absolute",
-                top: "16px",
-                zIndex: 20,
-                width: 0,
-                height: 0,
-                borderLeft: "16px solid transparent",
-                borderRight: "16px solid transparent",
-                borderTop: "32px solid #ef4444",
-                filter: "drop-shadow(0 4px 6px rgba(0,0,0,0.6))",
-              }}
-            />
-            <div
-              style={{
-                position: "absolute",
-                top: "14px",
-                zIndex: 21,
-                width: "12px",
-                height: "12px",
+                width: "280px",
+                height: "280px",
                 borderRadius: "50%",
-                background: "#fef08a",
-                border: "2px solid #ef4444",
+                background: "radial-gradient(circle, rgba(234,179,8,0.15) 0%, transparent 70%)",
+                top: "24px",
+                pointerEvents: "none",
               }}
             />
+
+            {/* Kim chỉ (Pointer) sang trọng mạ vàng góc 12h */}
+            <div
+              style={{
+                position: "absolute",
+                top: "12px",
+                zIndex: 25,
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                pointerEvents: "none",
+                filter: "drop-shadow(0 6px 12px rgba(0,0,0,0.8)) drop-shadow(0 2px 6px rgba(234,179,8,0.5))",
+              }}
+            >
+              {/* Chốt ngọc Emerald viền vàng trên đỉnh */}
+              <div
+                style={{
+                  width: "16px",
+                  height: "16px",
+                  borderRadius: "50%",
+                  background: "radial-gradient(circle at 35% 35%, #86efac, #16a34a 60%, #14532d 100%)",
+                  border: "2px solid #fef08a",
+                  boxShadow: "0 0 10px rgba(34,197,94,0.7)",
+                  zIndex: 2,
+                }}
+              />
+              {/* Mũi kim mạ vàng 3D sắc nét vuốt xuống */}
+              <div
+                style={{
+                  width: 0,
+                  height: 0,
+                  marginTop: "-5px",
+                  borderLeft: "11px solid transparent",
+                  borderRight: "11px solid transparent",
+                  borderTop: "26px solid #eab308",
+                  position: "relative",
+                }}
+              >
+                {/* Lõi phản quang của kim */}
+                <div
+                  style={{
+                    position: "absolute",
+                    top: "-26px",
+                    left: "-5px",
+                    width: 0,
+                    height: 0,
+                    borderLeft: "5px solid transparent",
+                    borderRight: "5px solid transparent",
+                    borderTop: "20px solid #fef08a",
+                  }}
+                />
+              </div>
+            </div>
 
             {/* Canvas Wheel */}
             <div style={{ width: "300px", height: "300px", position: "relative", marginTop: "12px" }}>
@@ -608,41 +758,71 @@ export function LuckyWheelClient({ currentUser, loggedInMemberId }: LuckyWheelCl
                 >
                   {isLoadingMembers && <option value="">Đang tải danh sách thành viên...</option>}
                   {!isLoadingMembers && members.length === 0 && <option value="">Chưa có thành viên nào</option>}
-                  {members.map((m) => (
-                    <option key={m.id} value={m.id}>
-                      {m.name} {m.jerseyNumber ? `(#${m.jerseyNumber})` : ""} - {m.unpaidCount > 0 ? `${m.unpaidCount} trận` : `Đủ điều kiện (${m.spinsAvailable} lượt)`}
-                    </option>
-                  ))}
+                  {members.map((m) => {
+                    const isMself = loggedInMemberId ? m.id === loggedInMemberId : false;
+                    return (
+                      <option key={m.id} value={m.id}>
+                        {m.name} {m.jerseyNumber ? `(#${m.jerseyNumber})` : ""} {isMself ? "(Bạn)" : ""} - {m.unpaidCount > 0 ? `Nợ ${m.unpaidCount} trận` : `${m.spinsAvailable} lượt`}
+                      </option>
+                    );
+                  })}
                 </select>
               </div>
 
               {/* Thông báo điều kiện thanh toán */}
               {selectedMember && (
-                <div style={{ fontSize: "0.76rem", borderRadius: "8px", padding: "8px 10px", lineHeight: 1.4 }}>
+                <div style={{ fontSize: "0.76rem", borderRadius: "8px", lineHeight: 1.4 }}>
                   {selectedMember.unpaidCount > 0 ? (
-                    <div style={{ background: "rgba(239,68,68,0.12)", border: "1px solid rgba(239,68,68,0.3)", borderRadius: "6px", padding: "8px", color: "#f87171" }}>
-                      <div style={{ fontWeight: 800, display: "flex", alignItems: "center", gap: "4px", marginBottom: "2px" }}>
-                        <AlertTriangle size={14} color="#f87171" /> {selectedMember.unpaidCount} trận chưa đóng ({formatCurrency(selectedMember.totalDebt)})
+                    <div
+                      style={{
+                        background: "rgba(239,68,68,0.12)",
+                        border: "1px solid rgba(239,68,68,0.3)",
+                        borderRadius: "8px",
+                        padding: "8px 12px",
+                        color: "#f87171",
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        gap: "8px",
+                        flexWrap: "wrap",
+                      }}
+                    >
+                      <div style={{ fontWeight: 700, display: "flex", alignItems: "center", gap: "6px" }}>
+                        <AlertTriangle size={14} color="#f87171" /> Chưa nộp {selectedMember.unpaidCount} trận ({formatCurrency(selectedMember.totalDebt)})
                       </div>
-                      <div>Cần thanh toán sạch toàn bộ bill để nhận 1 lượt quay nhé!</div>
                       <Link
                         href={`/payments/${selectedMember.id}`}
-                        style={{ display: "inline-flex", alignItems: "center", gap: "4px", color: "#facc15", fontWeight: 700, marginTop: "4px", textDecoration: "none" }}
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "4px",
+                          color: "#facc15",
+                          fontWeight: 700,
+                          textDecoration: "none",
+                          background: "rgba(250,204,21,0.15)",
+                          padding: "3px 8px",
+                          borderRadius: "6px",
+                          whiteSpace: "nowrap",
+                        }}
                       >
-                        Thanh toán ngay <ArrowRight size={12} />
+                        Nộp hèo ngay 💸 <ArrowRight size={12} />
                       </Link>
                     </div>
                   ) : selectedMember.spinsAvailable > 0 ? (
-                    <div style={{ background: "rgba(34,197,94,0.12)", border: "1px solid rgba(34,197,94,0.3)", borderRadius: "6px", padding: "8px", color: "#4ade80" }}>
-                      <div style={{ fontWeight: 800, display: "flex", alignItems: "center", gap: "4px" }}>
-                        <CheckCircle size={14} color="#4ade80" /> Đã hoàn thành · Có {selectedMember.spinsAvailable} lượt quay khả dụng 🎟️
+                    <div
+                      style={{
+                        background: "rgba(34,197,94,0.12)",
+                        border: "1px solid rgba(34,197,94,0.3)",
+                        borderRadius: "8px",
+                        padding: "8px 12px",
+                        color: "#4ade80",
+                      }}
+                    >
+                      <div style={{ fontWeight: 700, display: "flex", alignItems: "center", gap: "6px" }}>
+                        <CheckCircle size={14} color="#4ade80" /> Sạch hèo rùi · Còn {selectedMember.spinsAvailable} lượt quẩy 🎟️
                       </div>
                     </div>
-                  ) : (
-                    <div style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "6px", padding: "8px", color: "var(--muted-foreground)" }}>
-                      <div>💡 Đã hoàn thành nhưng đã dùng hết lượt quay. Hãy tham gia trận sau và đóng đủ để nhận thêm lượt!</div>
-                    </div>
-                  )}
+                  ) : null}
                 </div>
               )}
 
@@ -650,33 +830,35 @@ export function LuckyWheelClient({ currentUser, loggedInMemberId }: LuckyWheelCl
               <button
                 type="button"
                 onClick={handleSpin}
-                disabled={isSpinning || !selectedMember || selectedMember.unpaidCount > 0 || selectedMember.spinsAvailable <= 0}
+                disabled={isSpinDisabled}
                 className="btn btn-primary"
                 style={{
                   padding: "12px",
                   fontSize: "1rem",
                   fontWeight: 900,
                   borderRadius: "10px",
-                  background:
-                    isSpinning || !selectedMember || selectedMember.unpaidCount > 0 || selectedMember.spinsAvailable <= 0
-                      ? "rgba(255,255,255,0.08)"
-                      : "linear-gradient(135deg, #facc15, #eab308)",
-                  color: isSpinning || !selectedMember || selectedMember.unpaidCount > 0 || selectedMember.spinsAvailable <= 0 ? "var(--muted-foreground)" : "#0f172a",
-                  boxShadow:
-                    isSpinning || !selectedMember || selectedMember.unpaidCount > 0 || selectedMember.spinsAvailable <= 0
-                      ? "none"
-                      : "0 4px 20px rgba(234,179,8,0.4)",
+                  background: isSpinDisabled
+                    ? "rgba(255,255,255,0.08)"
+                    : "linear-gradient(135deg, #facc15, #eab308)",
+                  color: isSpinDisabled ? "var(--muted-foreground)" : "#0f172a",
+                  boxShadow: isSpinDisabled
+                    ? "none"
+                    : "0 4px 20px rgba(234,179,8,0.4)",
                   border: "none",
-                  cursor: isSpinning || !selectedMember || selectedMember.unpaidCount > 0 || selectedMember.spinsAvailable <= 0 ? "not-allowed" : "pointer",
+                  cursor: isSpinDisabled ? "not-allowed" : "pointer",
                 }}
               >
                 {isSpinning
-                  ? "ĐANG QUAY..."
-                  : selectedMember?.unpaidCount && selectedMember.unpaidCount > 0
-                  ? "CHƯA ĐÓNG ĐỦ - CHƯA ĐƯỢC QUAY"
-                  : selectedMember?.spinsAvailable && selectedMember.spinsAvailable > 0
-                  ? `🎰 QUAY NGAY (${selectedMember.spinsAvailable} lượt)`
-                  : "HẾT LƯỢT QUAY"}
+                  ? "ĐANG QUAY LẮC LƯ..."
+                  : isGuest
+                  ? "ĐĂNG NHẬP ĐỂ QUẨY 🤙"
+                  : !canOperateSpin
+                  ? "QUAY NICK MÌNH THUI 😆"
+                  : isUnpaid
+                  ? "CHƯA NỘP HÈO 💸"
+                  : !isOutOfSpins && selectedMember
+                  ? `🎰 QUAY LUN (${selectedMember.spinsAvailable} lượt)`
+                  : "HẾT LƯỢT RÙI, TRẬN SAU GỠ 🔥"}
               </button>
             </div>
           </div>
@@ -790,16 +972,16 @@ export function LuckyWheelClient({ currentUser, loggedInMemberId }: LuckyWheelCl
         </div>
       )}
 
-      {/* TAB 2: CÀI ĐẶT TỈ LỆ ẢO & PHẦN THƯỞNG (ADMIN SETTING) */}
+      {/* TAB 2: CÀI ĐẶT TỈ LỆ ẢO & PHẦN THƯỞNG (ADMIN SETTING - LƯU DATABASE) */}
       {activeTab === "settings" && (
         <div className="glass-card" style={{ padding: "20px", display: "flex", flexDirection: "column", gap: "16px", borderRadius: "16px" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "10px" }}>
             <div>
-              <h2 style={{ fontSize: "1.1rem", fontWeight: 800, color: "var(--card-foreground)" }}>
-                ⚙️ Thiết Lập Phần Thưởng & Tỉ Lệ Trúng Vòng Quay
+              <h2 style={{ fontSize: "1.1rem", fontWeight: 800, color: "var(--card-foreground)", display: "flex", alignItems: "center", gap: "6px" }}>
+                ⚙️ Cài Đặt Vòng Quay (Lưu Database)
               </h2>
               <div style={{ fontSize: "0.75rem", color: "var(--muted-foreground)" }}>
-                Đang có {baseOptions.length} phần thưởng. Bạn có thể thêm ô mới, sửa tên, chỉnh màu, xóa hoặc tùy biến tỉ lệ % trúng.
+                Lưu vào Database là toàn đội (cả máy tính & điện thoại) đều ăn ngay lập tức!
               </div>
             </div>
 
@@ -807,93 +989,235 @@ export function LuckyWheelClient({ currentUser, loggedInMemberId }: LuckyWheelCl
               <button
                 type="button"
                 onClick={handleResetSettings}
+                disabled={isSavingSettings}
                 className="btn btn-secondary"
-                style={{ padding: "6px 12px", fontSize: "0.78rem", display: "flex", alignItems: "center", gap: "4px" }}
+                style={{ padding: "7px 14px", fontSize: "0.78rem", display: "flex", alignItems: "center", gap: "4px" }}
               >
                 <RotateCcw size={14} /> Mặc định
               </button>
               <button
                 type="button"
                 onClick={handleSaveSettings}
+                disabled={isSavingSettings}
                 className="btn btn-primary"
-                style={{ padding: "6px 16px", fontSize: "0.82rem", fontWeight: 700 }}
+                style={{ padding: "7px 18px", fontSize: "0.82rem", fontWeight: 800, display: "flex", alignItems: "center", gap: "6px" }}
               >
-                Lưu cài đặt
+                {isSavingSettings ? <RefreshCw size={14} className="animate-spin" /> : null}
+                {isSavingSettings ? "Đang lưu DB..." : "Lưu vào Database 💾"}
               </button>
             </div>
           </div>
 
-          {/* Danh sách options */}
-          <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+          {/* Danh sách options dạng Card hiện đại */}
+          <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
             {baseOptions.map((opt, idx) => (
               <div
                 key={opt.id}
                 style={{
-                  display: "grid",
-                  gridTemplateColumns: "45px 1fr 65px 75px 36px",
-                  gap: "8px",
-                  alignItems: "center",
-                  padding: "10px 12px",
-                  borderRadius: "10px",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "10px",
+                  padding: "14px",
+                  borderRadius: "12px",
                   background: "rgba(255,255,255,0.03)",
-                  border: "1px solid var(--border)",
+                  border: "1px solid rgba(255,255,255,0.08)",
+                  position: "relative",
+                  borderLeft: `5px solid ${opt.color}`,
                 }}
               >
-                {/* Icon Emoji */}
-                <input
-                  type="text"
-                  value={opt.icon}
-                  onChange={(e) => updateOption(idx, "icon", e.target.value)}
-                  style={{
-                    padding: "6px",
-                    textAlign: "center",
-                    fontSize: "1.2rem",
-                    borderRadius: "6px",
-                    background: "rgba(0,0,0,0.3)",
-                    border: "1px solid var(--border)",
-                    color: "white",
-                  }}
-                  title="Biểu tượng Emoji"
-                />
+                {/* Header card: Số thứ tự + Preview + Xóa */}
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                    <span style={{ fontSize: "0.75rem", fontWeight: 800, background: "rgba(255,255,255,0.08)", padding: "2px 8px", borderRadius: "4px", color: "var(--muted-foreground)" }}>
+                      #{idx + 1}
+                    </span>
+                    <span style={{ fontSize: "0.9rem", fontWeight: 800, color: "#f8fafc" }}>
+                      {opt.icon} {opt.label}
+                    </span>
+                    <span
+                      style={{
+                        fontSize: "0.68rem",
+                        padding: "2px 6px",
+                        borderRadius: "4px",
+                        fontWeight: 700,
+                        background:
+                          opt.rewardType === "FREE_MATCH"
+                            ? "rgba(239,68,68,0.2)"
+                            : opt.rewardType === "DISCOUNT_5K"
+                            ? "rgba(34,197,94,0.2)"
+                            : opt.rewardType === "FREE_DRINK"
+                            ? "rgba(245,158,11,0.2)"
+                            : "rgba(255,255,255,0.06)",
+                        color:
+                          opt.rewardType === "FREE_MATCH"
+                            ? "#f87171"
+                            : opt.rewardType === "DISCOUNT_5K"
+                            ? "#4ade80"
+                            : opt.rewardType === "FREE_DRINK"
+                            ? "#fbbf24"
+                            : "var(--muted-foreground)",
+                      }}
+                    >
+                      {opt.rewardType === "FREE_MATCH"
+                        ? "🎰 Free sân"
+                        : opt.rewardType === "DISCOUNT_5K"
+                        ? "💵 Giảm 5k"
+                        : opt.rewardType === "FREE_DRINK"
+                        ? "🥤 Bao nước"
+                        : "🎈 Quà vui"}
+                    </span>
+                  </div>
 
-                {/* Tên quà */}
-                <input
-                  type="text"
-                  value={opt.label}
-                  onChange={(e) => updateOption(idx, "label", e.target.value)}
-                  style={{
-                    padding: "8px 10px",
-                    fontSize: "0.82rem",
-                    borderRadius: "6px",
-                    background: "rgba(0,0,0,0.3)",
-                    border: "1px solid var(--border)",
-                    color: "white",
-                    fontWeight: 600,
-                  }}
-                  placeholder="Tên phần thưởng..."
-                />
-
-                {/* Màu sắc */}
-                <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
-                  <input
-                    type="color"
-                    value={opt.color}
-                    onChange={(e) => updateOption(idx, "color", e.target.value)}
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveOption(opt.id)}
+                    title="Xóa ô này"
                     style={{
-                      width: "32px",
-                      height: "32px",
-                      border: "none",
+                      width: "28px",
+                      height: "28px",
                       borderRadius: "6px",
-                      background: "transparent",
+                      border: "none",
+                      background: "rgba(239, 68, 68, 0.15)",
+                      color: "#f87171",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
                       cursor: "pointer",
                     }}
-                  />
-                  <span style={{ fontSize: "0.7rem", color: "var(--muted-foreground)" }}>Màu</span>
+                  >
+                    <Trash2 size={14} />
+                  </button>
                 </div>
 
-                {/* Tỉ lệ % trúng ảo */}
-                <div>
-                  <div style={{ display: "flex", alignItems: "center", gap: "2px" }}>
+                {/* Hàng 1: Icon + Tên quà + Loại phần thưởng */}
+                <div style={{ display: "grid", gridTemplateColumns: "70px 1fr 160px", gap: "8px", alignItems: "center" }}>
+                  <div>
+                    <label style={{ display: "block", fontSize: "0.68rem", color: "var(--muted-foreground)", marginBottom: "2px" }}>Icon</label>
+                    <input
+                      type="text"
+                      value={opt.icon}
+                      onChange={(e) => updateOption(idx, "icon", e.target.value)}
+                      style={{
+                        width: "100%",
+                        padding: "6px",
+                        textAlign: "center",
+                        fontSize: "1.1rem",
+                        borderRadius: "6px",
+                        background: "rgba(0,0,0,0.3)",
+                        border: "1px solid var(--border)",
+                        color: "white",
+                      }}
+                    />
+                  </div>
+
+                  <div>
+                    <label style={{ display: "block", fontSize: "0.68rem", color: "var(--muted-foreground)", marginBottom: "2px" }}>Tên phần thưởng</label>
+                    <input
+                      type="text"
+                      value={opt.label}
+                      onChange={(e) => updateOption(idx, "label", e.target.value)}
+                      style={{
+                        width: "100%",
+                        padding: "7px 10px",
+                        fontSize: "0.82rem",
+                        borderRadius: "6px",
+                        background: "rgba(0,0,0,0.3)",
+                        border: "1px solid var(--border)",
+                        color: "white",
+                        fontWeight: 600,
+                      }}
+                      placeholder="Tên phần thưởng..."
+                    />
+                  </div>
+
+                  <div>
+                    <label style={{ display: "block", fontSize: "0.68rem", color: "var(--muted-foreground)", marginBottom: "2px" }}>Loại hiệu lực</label>
+                    <select
+                      value={opt.rewardType || "NONE"}
+                      onChange={(e) => updateOption(idx, "rewardType", e.target.value as any)}
+                      style={{
+                        width: "100%",
+                        padding: "7px 8px",
+                        fontSize: "0.78rem",
+                        borderRadius: "6px",
+                        background: "#0f172a",
+                        border: "1px solid var(--border)",
+                        color: opt.rewardType && opt.rewardType !== "NONE" ? "#4ade80" : "white",
+                        fontWeight: 600,
+                      }}
+                    >
+                      <option value="NONE">🎈 Quà vui vẻ / Tinh thần</option>
+                      <option value="DISCOUNT_5K">💵 Giảm 5k tiền sân</option>
+                      <option value="FREE_MATCH">🎰 Free 100% tiền sân</option>
+                      <option value="FREE_DRINK">🥤 Duy bao nước</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Hàng chọn emoji nhanh */}
+                <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
+                  <span style={{ fontSize: "0.68rem", color: "var(--muted-foreground)" }}>Gợi ý icon:</span>
+                  {PRESET_WHEEL_ICONS.map((emoji) => (
+                    <button
+                      key={emoji}
+                      type="button"
+                      onClick={() => updateOption(idx, "icon", emoji)}
+                      style={{
+                        background: opt.icon === emoji ? "rgba(250,204,21,0.25)" : "rgba(255,255,255,0.06)",
+                        border: opt.icon === emoji ? "1px solid #facc15" : "1px solid rgba(255,255,255,0.1)",
+                        borderRadius: "4px",
+                        padding: "2px 6px",
+                        fontSize: "0.85rem",
+                        cursor: "pointer",
+                      }}
+                    >
+                      {emoji}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Hàng 2: Chọn bảng màu Preset sang trọng + Tỉ lệ % */}
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "10px", paddingTop: "4px", borderTop: "1px solid rgba(255,255,255,0.05)" }}>
+                  {/* Bảng màu Preset cao cấp */}
+                  <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
+                    <span style={{ fontSize: "0.68rem", color: "var(--muted-foreground)" }}>Màu sắc:</span>
+                    {PRESET_WHEEL_COLORS.map((c) => (
+                      <button
+                        key={c.color}
+                        type="button"
+                        onClick={() => updateOption(idx, "color", c.color)}
+                        title={c.label}
+                        style={{
+                          width: "20px",
+                          height: "20px",
+                          borderRadius: "50%",
+                          background: c.color,
+                          border: opt.color.toLowerCase() === c.color.toLowerCase() ? "2px solid #facc15" : "1px solid rgba(255,255,255,0.2)",
+                          cursor: "pointer",
+                          transform: opt.color.toLowerCase() === c.color.toLowerCase() ? "scale(1.2)" : "scale(1)",
+                          transition: "all 0.15s",
+                        }}
+                      />
+                    ))}
+                    <input
+                      type="color"
+                      value={opt.color}
+                      onChange={(e) => updateOption(idx, "color", e.target.value)}
+                      title="Màu tùy chỉnh"
+                      style={{
+                        width: "22px",
+                        height: "22px",
+                        border: "none",
+                        borderRadius: "50%",
+                        background: "transparent",
+                        cursor: "pointer",
+                      }}
+                    />
+                  </div>
+
+                  {/* Tỉ lệ % ảo */}
+                  <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                    <span style={{ fontSize: "0.72rem", color: "var(--muted-foreground)" }}>Tỉ lệ trúng:</span>
                     <input
                       type="number"
                       min={0}
@@ -902,8 +1226,8 @@ export function LuckyWheelClient({ currentUser, loggedInMemberId }: LuckyWheelCl
                       value={opt.weight}
                       onChange={(e) => updateOption(idx, "weight", parseFloat(e.target.value) || 0)}
                       style={{
-                        width: "55px",
-                        padding: "6px 4px",
+                        width: "60px",
+                        padding: "4px 6px",
                         textAlign: "center",
                         fontSize: "0.82rem",
                         fontWeight: 700,
@@ -913,30 +1237,9 @@ export function LuckyWheelClient({ currentUser, loggedInMemberId }: LuckyWheelCl
                         color: "#facc15",
                       }}
                     />
-                    <span style={{ fontSize: "0.75rem", fontWeight: 700, color: "#facc15" }}>%</span>
+                    <span style={{ fontSize: "0.78rem", fontWeight: 800, color: "#facc15" }}>%</span>
                   </div>
                 </div>
-
-                {/* Nút Xóa */}
-                <button
-                  type="button"
-                  onClick={() => handleRemoveOption(opt.id)}
-                  title="Xóa ô phần thưởng này"
-                  style={{
-                    width: "32px",
-                    height: "32px",
-                    borderRadius: "6px",
-                    border: "none",
-                    background: "rgba(239, 68, 68, 0.15)",
-                    color: "#f87171",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    cursor: "pointer",
-                  }}
-                >
-                  <Trash2 size={15} />
-                </button>
               </div>
             ))}
           </div>
@@ -950,12 +1253,12 @@ export function LuckyWheelClient({ currentUser, loggedInMemberId }: LuckyWheelCl
               alignItems: "center",
               justifyContent: "center",
               gap: "6px",
-              padding: "10px",
+              padding: "12px",
               borderRadius: "10px",
               background: "rgba(34, 197, 94, 0.12)",
               border: "1px dashed rgba(34, 197, 94, 0.4)",
               color: "#4ade80",
-              fontWeight: 700,
+              fontWeight: 800,
               fontSize: "0.85rem",
               cursor: "pointer",
               transition: "all 0.2s",
@@ -964,9 +1267,9 @@ export function LuckyWheelClient({ currentUser, loggedInMemberId }: LuckyWheelCl
             <Plus size={16} /> Thêm Ô Phần Thưởng Mới
           </button>
 
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px", background: "rgba(250,204,21,0.08)", borderRadius: "8px", border: "1px solid rgba(250,204,21,0.2)" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 14px", background: "rgba(250,204,21,0.08)", borderRadius: "8px", border: "1px solid rgba(250,204,21,0.2)" }}>
             <span style={{ fontSize: "0.8rem", color: "#fef08a" }}>
-              💡 Tổng tỉ lệ ảo: {Number(baseOptions.reduce((sum, o) => sum + Number(o.weight || 0), 0).toFixed(2))}% (Hệ thống tự động chuẩn hóa tỉ lệ theo trọng số)
+              💡 Tổng tỉ lệ: {Number(baseOptions.reduce((sum, o) => sum + Number(o.weight || 0), 0).toFixed(2))}% (Hệ thống tự động chuẩn hóa tỉ lệ theo trọng số)
             </span>
           </div>
         </div>
@@ -1008,8 +1311,8 @@ export function LuckyWheelClient({ currentUser, loggedInMemberId }: LuckyWheelCl
           >
             <div style={{ fontSize: "4.5rem", lineHeight: 1 }}>{winningPrize.icon}</div>
 
-            <div style={{ fontSize: "0.82rem", fontWeight: 800, color: "#facc15", textTransform: "uppercase", letterSpacing: "1px", display: "flex", alignItems: "center", gap: "4px" }}>
-              <Sparkles size={16} /> Kết Quả Quay Thưởng!
+            <div style={{ fontSize: "0.85rem", fontWeight: 800, color: "#facc15", textTransform: "uppercase", letterSpacing: "1px", display: "flex", alignItems: "center", gap: "4px" }}>
+              <Sparkles size={16} /> CHÁY QUÁ BẠN ƠI! 🎉
             </div>
 
             <h3 style={{ fontSize: "1.45rem", fontWeight: 900, color: "#ffffff" }}>
@@ -1017,20 +1320,20 @@ export function LuckyWheelClient({ currentUser, loggedInMemberId }: LuckyWheelCl
             </h3>
 
             <div style={{ fontSize: "0.85rem", color: "var(--muted-foreground)", lineHeight: 1.5 }}>
-              Chúc mừng <strong>{selectedMember.name}</strong> đã trúng phần thưởng!
-              {winningPrize.id === "4" && (
+              Chúc mừng <strong>{selectedMember.name}</strong> đã ẵm được quà!
+              {(winningPrize.rewardType === "DISCOUNT_5K" || winningPrize.discountAmount) && (
                 <div style={{ marginTop: "6px", color: "#4ade80", fontWeight: 700 }}>
-                  🎟️ Voucher giảm 5.000đ đã được lưu vào tài khoản để trừ tiền sân trận sau!
+                  🎟️ Đã nạp Voucher giảm 5.000đ vào ví! Trận sau trừ tiền lun nha!
                 </div>
               )}
-              {winningPrize.id === "6" && (
-                <div style={{ marginTop: "6px", color: "#ef4444", fontWeight: 700 }}>
-                  🎰 JACKPOT! Bạn được miễn phí 100% tiền sân trận tiếp theo!
+              {(winningPrize.rewardType === "FREE_MATCH" || winningPrize.isFreeMatch) && (
+                <div style={{ marginTop: "6px", color: "#facc15", fontWeight: 800 }}>
+                  🎰 NỔ HŨ JACKPOT! Trận tới được đá chùa Free 100% tiền sân!
                 </div>
               )}
-              {winningPrize.id === "5" && (
-                <div style={{ marginTop: "6px", color: "#f59e0b", fontWeight: 700 }}>
-                  🥤 Trận sau nhớ tìm Duy để được mời nước nhé!
+              {(winningPrize.rewardType === "FREE_DRINK" || winningPrize.isFreeDrink) && (
+                <div style={{ marginTop: "6px", color: "#fbbf24", fontWeight: 700 }}>
+                  🥤 Ra sân nhớ réo Duy bao nước liền tay nhe!
                 </div>
               )}
             </div>
@@ -1051,7 +1354,7 @@ export function LuckyWheelClient({ currentUser, loggedInMemberId }: LuckyWheelCl
                 cursor: "pointer",
               }}
             >
-              Nhận Quà & Đóng
+              Húp Quà Lun 🎁
             </button>
           </div>
         </div>

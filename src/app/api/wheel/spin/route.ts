@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { auth } from "@/lib/auth";
 import { RecordStatus } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
@@ -41,11 +42,32 @@ export async function GET() {
 // POST /api/wheel/spin — Thực hiện trừ lượt quay và lưu phần thưởng
 export async function POST(req: NextRequest) {
   try {
+    const session = await auth();
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: "Vui lòng đăng nhập để thực hiện quay thưởng" }, { status: 401 });
+    }
+
     const body = await req.json();
     const { memberId, prizeId, label, icon } = body;
 
     if (!memberId || !prizeId || !label) {
       return NextResponse.json({ error: "Thiếu thông tin người quay hoặc phần thưởng" }, { status: 400 });
+    }
+
+    const isAdmin = session.user.role === "ADMIN";
+
+    // Nếu không phải Admin, chỉ được quay lượt của chính mình
+    if (!isAdmin) {
+      const loggedMember = await prisma.member.findUnique({
+        where: { userId: session.user.id },
+        select: { id: true },
+      });
+      if (!loggedMember || loggedMember.id !== memberId) {
+        return NextResponse.json(
+          { error: "Bạn chỉ có thể thực hiện quay lượt của chính mình!" },
+          { status: 403 }
+        );
+      }
     }
 
     const member = await prisma.member.findUnique({
@@ -73,7 +95,7 @@ export async function POST(req: NextRequest) {
 
     if (unpaidCount > 0) {
       return NextResponse.json(
-        { error: `Thành viên còn nợ ${unpaidCount} trận. Phải thanh toán hết sạch bill mới được quay!` },
+        { error: `Còn nợ hèo ${unpaidCount} trận kìa! Nộp xong mới được quẩy nha 💸` },
         { status: 400 }
       );
     }
@@ -81,15 +103,21 @@ export async function POST(req: NextRequest) {
     // 2. Kiểm tra số lượt quay còn lại
     if (member.spinsAvailable <= 0) {
       return NextResponse.json(
-        { error: "Thành viên đã hết lượt quay! Hãy tham gia trận tiếp theo và thanh toán đủ để nhận thêm lượt nhé!" },
+        { error: "Hết lượt rùi! Trận sau đá tốt + nộp đủ là có lượt ngay nha 🔥" },
         { status: 400 }
       );
     }
 
-    // 3. Trừ 1 lượt quay và tạo bản ghi Reward
-    const discountAmount = prizeId === "4" ? 5000 : 0;
-    const isFreeMatch = prizeId === "6";
-    const isFreeDrink = prizeId === "5";
+    // 3. Tra cứu cấu hình phần thưởng thực tế từ DB
+    const wheelSetting = await prisma.systemSetting.findUnique({
+      where: { key: "WHEEL_OPTIONS" },
+    });
+    const options = Array.isArray(wheelSetting?.value) ? (wheelSetting.value as any[]) : [];
+    const matchedOpt = options.find((o) => o.id === prizeId);
+
+    const discountAmount = matchedOpt?.discountAmount ?? (matchedOpt?.rewardType === "DISCOUNT_5K" ? 5000 : prizeId === "4" ? 5000 : 0);
+    const isFreeMatch = matchedOpt?.isFreeMatch ?? (matchedOpt?.rewardType === "FREE_MATCH" || prizeId === "6");
+    const isFreeDrink = matchedOpt?.isFreeDrink ?? (matchedOpt?.rewardType === "FREE_DRINK" || prizeId === "5");
 
     const [updatedMember, newReward] = await prisma.$transaction([
       prisma.member.update({

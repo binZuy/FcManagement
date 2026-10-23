@@ -7,6 +7,7 @@ import { ArrowLeft, MapPin, Edit, Users, UserCheck, Star, Image as ImageIcon } f
 import { MatchStatus } from "@prisma/client";
 import { MatchAdminActions } from "@/components/MatchAdminActions";
 import { MotmSelectModal } from "@/components/MotmSelectModal";
+import { InternalMatchPitchLineup, PitchPlayer } from "@/components/InternalMatchPitchLineup";
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
   UPCOMING: { label: "Sắp diễn ra", color: "#60a5fa", bg: "rgba(96,165,250,0.12)" },
@@ -54,6 +55,42 @@ export default async function MatchDetailPage({ params }: Params) {
   });
 
   if (!match) notFound();
+
+  // If internal match, load all active members for pitch lineup selection
+  let allFcMembers: Array<{
+    id: string;
+    name: string;
+    image?: string | null;
+    jerseyNumber?: number | null;
+    position?: string | null;
+  }> = [];
+
+  if (match.matchType === "INTERNAL") {
+    const members = await prisma.member.findMany({
+      where: { status: "ACTIVE" },
+      include: {
+        user: { select: { name: true, image: true } },
+      },
+      orderBy: { user: { name: "asc" } },
+    });
+    allFcMembers = members.map((m) => ({
+      id: m.id,
+      name: m.user.name || "Cầu thủ",
+      image: m.user.image,
+      jerseyNumber: m.jerseyNumber,
+      position: m.position,
+    }));
+  }
+
+  const initialPlayers: PitchPlayer[] = match.attendances.map((a) => ({
+    memberId: a.memberId,
+    name: a.member.user.name || "Cầu thủ",
+    image: a.member.user.image,
+    jerseyNumber: a.member.jerseyNumber,
+    position: a.member.position,
+    guestCount: a.guestCount,
+    teamSide: a.teamSide as "TEAM_A" | "TEAM_B" | null,
+  }));
 
   const statusCfg = STATUS_CONFIG[match.status] ?? STATUS_CONFIG.UPCOMING;
   const resultCfg = match.result ? RESULT_CONFIG[match.result] : null;
@@ -203,6 +240,18 @@ export default async function MatchDetailPage({ params }: Params) {
         )}
       </div>
 
+      {/* SÂN BÓNG VÀ CHIA ĐỘI NỘI BỘ (CHO PHÉP BẤT KỲ AI SẮP XẾP / KÉO THẢ / CHUYỂN ĐỘI) */}
+      {match.matchType === "INTERNAL" && (
+        <InternalMatchPitchLineup
+          matchId={match.id}
+          matchTitle={match.title}
+          initialTeamAName={match.teamAName}
+          initialTeamBName={match.teamBName}
+          initialPlayers={initialPlayers}
+          allFcMembers={allFcMembers}
+        />
+      )}
+
       {/* DANH SÁCH ĐIỂM DANH RESPONSIVE (Web Table & Mobile Cards) */}
       <div className="glass-card" style={{ padding: "20px" }}>
         <h2 style={{ fontSize: "1.05rem", fontWeight: 700, marginBottom: "16px", color: "var(--card-foreground)", display: "flex", alignItems: "center", gap: "8px" }}>
@@ -242,14 +291,29 @@ export default async function MatchDetailPage({ params }: Params) {
                               </div>
                             )}
                             <div>
-                              <span style={{ fontWeight: 600, color: "var(--card-foreground)", fontSize: "0.88rem" }}>
-                                {a.member.user.name}
-                              </span>
-                              {a.guestCount > 0 && (
-                                <span style={{ color: "var(--primary)", fontSize: "0.78rem", marginLeft: "6px", fontWeight: 700 }}>
-                                  (+{a.guestCount} khách)
+                              <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
+                                <span style={{ fontWeight: 600, color: "var(--card-foreground)", fontSize: "0.88rem" }}>
+                                  {a.member.user.name}
                                 </span>
-                              )}
+                                {match.matchType === "INTERNAL" && a.teamSide && (
+                                  <span style={{
+                                    fontSize: "0.7rem",
+                                    padding: "2px 7px",
+                                    borderRadius: "6px",
+                                    fontWeight: 700,
+                                    background: a.teamSide === "TEAM_A" ? "rgba(59,130,246,0.18)" : "rgba(245,158,11,0.18)",
+                                    color: a.teamSide === "TEAM_A" ? "#60a5fa" : "#f59e0b",
+                                    border: a.teamSide === "TEAM_A" ? "1px solid rgba(59,130,246,0.3)" : "1px solid rgba(245,158,11,0.3)",
+                                  }}>
+                                    {a.teamSide === "TEAM_A" ? (match.teamAName || "Đội A") : (match.teamBName || "Đội B")}
+                                  </span>
+                                )}
+                                {a.guestCount > 0 && (
+                                  <span style={{ color: "var(--primary)", fontSize: "0.78rem", fontWeight: 700 }}>
+                                    (+{a.guestCount} khách)
+                                  </span>
+                                )}
+                              </div>
                             </div>
                           </div>
                         </td>
@@ -310,8 +374,24 @@ export default async function MatchDetailPage({ params }: Params) {
                         </div>
                       )}
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontWeight: 700, color: "var(--card-foreground)", fontSize: "0.88rem", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                          {a.member.user.name}
+                        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                          <span style={{ fontWeight: 700, color: "var(--card-foreground)", fontSize: "0.88rem", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                            {a.member.user.name}
+                          </span>
+                          {match.matchType === "INTERNAL" && a.teamSide && (
+                            <span style={{
+                              fontSize: "0.65rem",
+                              padding: "1px 6px",
+                              borderRadius: "6px",
+                              fontWeight: 700,
+                              background: a.teamSide === "TEAM_A" ? "rgba(59,130,246,0.18)" : "rgba(245,158,11,0.18)",
+                              color: a.teamSide === "TEAM_A" ? "#60a5fa" : "#f59e0b",
+                              border: a.teamSide === "TEAM_A" ? "1px solid rgba(59,130,246,0.3)" : "1px solid rgba(245,158,11,0.3)",
+                              whiteSpace: "nowrap",
+                            }}>
+                              {a.teamSide === "TEAM_A" ? (match.teamAName || "Đội A") : (match.teamBName || "Đội B")}
+                            </span>
+                          )}
                         </div>
                         <div style={{ fontSize: "0.72rem", color: "var(--muted-foreground)", marginTop: "2px" }}>
                           {(() => {
