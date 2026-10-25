@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
+import { createPortal } from "react-dom";
 import {
   QrCode,
   X,
@@ -89,6 +90,11 @@ export function QRPaymentDialog({
   const [copied, setCopied] = useState(false);
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [showBankPicker, setShowBankPicker] = useState(false);
+
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const [qrTemplate, setQrTemplate] = useState<"compact2" | "qr_only">("compact2");
   const [imgLoadError, setImgLoadError] = useState(false);
@@ -422,56 +428,57 @@ const BANK_APP_MAP: Record<string, string> = {
           : "Chọn trận cần đóng"}
       </button>
 
-      {open && (
+      {mounted && open && createPortal(
         <div
           style={{
             position: "fixed",
             inset: 0,
-            background: "rgba(0,0,0,0.82)",
-            backdropFilter: "blur(8px)",
-            zIndex: 9999,
+            background: "rgba(0,0,0,0.85)",
+            backdropFilter: "blur(10px)",
+            WebkitBackdropFilter: "blur(10px)",
+            zIndex: 99999,
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            padding: "12px",
+            padding: "16px",
           }}
           onClick={(e) => { if (e.target === e.currentTarget) handleClose(); }}
         >
           <div
             style={{
               background: "#0f172a",
-              border: "1px solid rgba(34,197,94,0.25)",
-              borderRadius: "16px",
+              border: "1px solid rgba(34,197,94,0.3)",
+              borderRadius: "18px",
               width: "100%",
-              maxWidth: "360px",
-              maxHeight: "90dvh",
+              maxWidth: "420px",
+              maxHeight: "92dvh",
               overflow: "hidden",
               display: "flex",
               flexDirection: "column",
-              boxShadow: "0 20px 60px rgba(0,0,0,0.6)",
+              boxShadow: "0 25px 70px rgba(0,0,0,0.8), 0 0 40px rgba(34,197,94,0.15)",
             }}
           >
             {/* Header */}
             <div
               style={{
-                padding: "14px 18px",
-                borderBottom: "1px solid rgba(255,255,255,0.06)",
+                padding: "16px 20px",
+                borderBottom: "1px solid rgba(255,255,255,0.08)",
                 display: "flex",
                 justifyContent: "space-between",
                 alignItems: "center",
-                background: "rgba(34,197,94,0.04)",
+                background: "rgba(34,197,94,0.05)",
                 flexShrink: 0,
               }}
             >
               <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                <div style={{ width: 34, height: 34, borderRadius: "10px", background: "rgba(34,197,94,0.15)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                  <QrCode size={17} color="#22c55e" />
+                <div style={{ width: 36, height: 36, borderRadius: "10px", background: "rgba(34,197,94,0.18)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                  <QrCode size={19} color="#22c55e" />
                 </div>
                 <div>
-                  <div style={{ fontWeight: 700, color: "#f1f5f9", fontSize: "0.9rem" }}>
+                  <div style={{ fontWeight: 800, color: "#f1f5f9", fontSize: "0.95rem" }}>
                     {step === "qr" ? "Quét QR để thanh toán" : "Thanh toán thành công!"}
                   </div>
-                  <div style={{ fontSize: "0.72rem", color: "#64748b", marginTop: "1px" }}>
+                  <div style={{ fontSize: "0.75rem", color: "#64748b", marginTop: "1px" }}>
                     {memberName} · {memberCode}
                   </div>
                 </div>
@@ -485,7 +492,7 @@ const BANK_APP_MAP: Record<string, string> = {
             </div>
 
             {/* Scrollable Content */}
-            <div style={{ flex: 1, overflowY: "auto", padding: "18px 14px" }}>
+            <div style={{ flex: 1, overflowY: "auto", padding: "18px 16px" }}>
               {loading ? (
                 <div style={{ padding: "40px 0", display: "flex", flexDirection: "column", alignItems: "center", gap: "12px", color: "#94a3b8" }}>
                   <Loader2 size={32} style={{ animation: "spin 1s linear infinite", color: "#22c55e" }} />
@@ -555,7 +562,7 @@ const BANK_APP_MAP: Record<string, string> = {
                           borderRadius: "14px",
                           boxShadow: "0 0 0 1px rgba(34,197,94,0.3), 0 8px 30px rgba(0,0,0,0.4)",
                           width: "100%",
-                          maxWidth: qrTemplate === "compact2" ? "250px" : "200px",
+                          maxWidth: qrTemplate === "compact2" ? "260px" : "210px",
                           minHeight: "180px",
                           display: "flex",
                           alignItems: "center",
@@ -711,18 +718,20 @@ const BANK_APP_MAP: Record<string, string> = {
               )}
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Modal chọn App Ngân Hàng */}
-      {showBankPicker && (
+      {mounted && showBankPicker && createPortal(
         <div
           style={{
             position: "fixed",
             inset: 0,
-            background: "rgba(0,0,0,0.85)",
-            backdropFilter: "blur(8px)",
-            zIndex: 10000,
+            background: "rgba(0,0,0,0.88)",
+            backdropFilter: "blur(10px)",
+            WebkitBackdropFilter: "blur(10px)",
+            zIndex: 100000,
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
@@ -808,7 +817,8 @@ const BANK_APP_MAP: Record<string, string> = {
               ))}
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       <style>{`
