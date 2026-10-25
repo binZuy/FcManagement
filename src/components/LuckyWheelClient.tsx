@@ -1134,16 +1134,24 @@ export function LuckyWheelClient({ currentUser, loggedInMemberId }: LuckyWheelCl
                         background:
                           opt.rewardType === "FREE_MATCH"
                             ? "rgba(239,68,68,0.2)"
+                            : opt.rewardType === "DISCOUNT_10K"
+                            ? "rgba(236,72,153,0.2)"
                             : opt.rewardType === "DISCOUNT_5K"
                             ? "rgba(34,197,94,0.2)"
+                            : opt.rewardType === "MOTM_NEXT_MATCH"
+                            ? "rgba(234,179,8,0.2)"
                             : opt.rewardType === "FREE_DRINK"
                             ? "rgba(245,158,11,0.2)"
                             : "rgba(255,255,255,0.06)",
                         color:
                           opt.rewardType === "FREE_MATCH"
                             ? "#f87171"
+                            : opt.rewardType === "DISCOUNT_10K"
+                            ? "#f472b6"
                             : opt.rewardType === "DISCOUNT_5K"
                             ? "#4ade80"
+                            : opt.rewardType === "MOTM_NEXT_MATCH"
+                            ? "#facc15"
                             : opt.rewardType === "FREE_DRINK"
                             ? "#fbbf24"
                             : "var(--muted-foreground)",
@@ -1151,10 +1159,14 @@ export function LuckyWheelClient({ currentUser, loggedInMemberId }: LuckyWheelCl
                     >
                       {opt.rewardType === "FREE_MATCH"
                         ? "🎰 Free sân"
+                        : opt.rewardType === "DISCOUNT_10K"
+                        ? "🎁 Giảm 10k"
                         : opt.rewardType === "DISCOUNT_5K"
                         ? "💵 Giảm 5k"
+                        : opt.rewardType === "MOTM_NEXT_MATCH"
+                        ? "⭐ Làm MOTM"
                         : opt.rewardType === "FREE_DRINK"
-                        ? "🥤 Bao nước"
+                        ? "🥤 Duy bao nước"
                         : "🎈 Quà vui"}
                     </span>
                   </div>
@@ -1239,8 +1251,10 @@ export function LuckyWheelClient({ currentUser, loggedInMemberId }: LuckyWheelCl
                     >
                       <option value="NONE">🎈 Quà vui vẻ / Tinh thần</option>
                       <option value="DISCOUNT_5K">💵 Giảm 5k tiền sân</option>
+                      <option value="DISCOUNT_10K">🎁 Giảm 10k tiền sân</option>
+                      <option value="MOTM_NEXT_MATCH">⭐ Làm MOTM trận sau</option>
+                      <option value="FREE_DRINK">🥤 Được Duy mời nước</option>
                       <option value="FREE_MATCH">🎰 Free 100% tiền sân</option>
-                      <option value="FREE_DRINK">🥤 Duy bao nước</option>
                     </select>
                   </div>
                 </div>

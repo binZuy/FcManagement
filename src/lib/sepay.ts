@@ -232,6 +232,15 @@ export async function processSepayTransaction(
           sepayTxId: tx.sepayId,
         },
       }),
+      prisma.memberReward.updateMany({
+        where: {
+          memberId: bundle.memberId,
+          note: `pending_bundle:${bundle.bundleCode}`,
+        },
+        data: {
+          note: `used_in_bundle:${bundle.bundleCode}`,
+        },
+      }),
       prisma.sepayTransaction.update({
         where: { id: tx.id },
         data: {

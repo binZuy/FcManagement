@@ -43,15 +43,22 @@ function formatCountdown(ms: number): string {
 }
 
 /**
- * Build VietQR image URL hoàn toàn trên client — không cần server tính
- * Vì tất cả biến đều là NEXT_PUBLIC_* nên client sử dụng được trực tiếp
+ * Build VietQR image URL hỗ trợ cả dạng Thẻ đầy đủ (compact2) và Mã QR đơn lẻ (qr_only)
  */
-function buildClientQRUrl(bankBin: string, accountNo: string, accountName: string, amount: number, addInfo: string): string {
-  const base = `https://img.vietqr.io/image/${bankBin}-${accountNo}-compact2.png`;
+function buildClientQRUrl(
+  bankBin: string,
+  accountNo: string,
+  accountName: string,
+  amount: number,
+  addInfo: string,
+  template: "compact2" | "qr_only" = "compact2"
+): string {
+  if (!bankBin || !accountNo) return "";
+  const base = `https://img.vietqr.io/image/${bankBin}-${accountNo}-${template}.png`;
   const q = new URLSearchParams({
     amount: String(Math.round(amount)),
     addInfo,
-    accountName,
+    accountName: accountName || "",
   });
   return `${base}?${q.toString()}`;
 }
@@ -83,6 +90,12 @@ export function QRPaymentDialog({
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [showBankPicker, setShowBankPicker] = useState(false);
 
+  const [qrTemplate, setQrTemplate] = useState<"compact2" | "qr_only">("compact2");
+  const [imgLoadError, setImgLoadError] = useState(false);
+  const [bankBin, setBankBin] = useState<string>(process.env.NEXT_PUBLIC_BANK_BIN ?? "");
+  const [accountNo, setAccountNo] = useState<string>(process.env.NEXT_PUBLIC_ACCOUNT_NO ?? "");
+  const [accountName, setAccountName] = useState<string>(process.env.NEXT_PUBLIC_ACCOUNT_NAME ?? "");
+
   const [bundleId, setBundleId] = useState<string | null>(null);
   const [bundleCode, setBundleCode] = useState<string | null>(null);
   const [bundleStatus, setBundleStatus] = useState<string | null>(null);
@@ -96,8 +109,6 @@ export function QRPaymentDialog({
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const STORAGE_KEY = `active_qr_bundle_${memberId}`;
-  const BANK_BIN = process.env.NEXT_PUBLIC_BANK_BIN ?? "";
-  const ACCOUNT_NO = process.env.NEXT_PUBLIC_ACCOUNT_NO ?? "";
 
   const cleanup = useCallback(() => {
     if (pollRef.current) clearInterval(pollRef.current);
@@ -120,6 +131,7 @@ export function QRPaymentDialog({
     setQrUrl(null);
     setExpiresAt(null);
     setSaveStatus("idle");
+    setImgLoadError(false);
   }, [bundleId, step, bundleStatus, cleanup, STORAGE_KEY]);
 
   const checkStatusNow = useCallback(async (id: string) => {
@@ -140,20 +152,26 @@ export function QRPaymentDialog({
       } else if (data.bundle) {
         setBundleId(data.bundle.id);
         setBundleCode(data.bundle.bundleCode);
-        const content = data.qrContent || `${process.env.NEXT_PUBLIC_TRANSFER_PREFIX ?? "FCKX"} ${data.bundle.member?.code || ""}-${data.bundle.bundleCode}`;
+        const content = data.qrContent || `${process.env.NEXT_PUBLIC_TRANSFER_PREFIX ?? "FCKTX"} ${data.bundle.member?.code || ""}-${data.bundle.bundleCode}`;
         setQrContent(content);
 
-        const bankBin = BANK_BIN || process.env.NEXT_PUBLIC_BANK_BIN || "";
-        const accountNo = ACCOUNT_NO || process.env.NEXT_PUBLIC_ACCOUNT_NO || "";
-        const clientQrUrl = (bankBin && accountNo)
-          ? buildClientQRUrl(bankBin, accountNo, process.env.NEXT_PUBLIC_ACCOUNT_NAME ?? "", data.bundle.totalAmount, content)
-          : null;
+        const activeBin = data.bankBin || bankBin || process.env.NEXT_PUBLIC_BANK_BIN || "";
+        const activeAcc = data.accountNo || accountNo || process.env.NEXT_PUBLIC_ACCOUNT_NO || "";
+        const activeName = data.accountName || accountName || process.env.NEXT_PUBLIC_ACCOUNT_NAME || "";
+
+        if (data.bankBin) setBankBin(data.bankBin);
+        if (data.accountNo) setAccountNo(data.accountNo);
+        if (data.accountName) setAccountName(data.accountName);
+
+        const clientQrUrl = (activeBin && activeAcc)
+          ? buildClientQRUrl(activeBin, activeAcc, activeName, data.bundle.totalAmount, content, qrTemplate)
+          : data.qrUrl || null;
         setQrUrl(clientQrUrl);
         setTotalAmount(data.bundle.totalAmount);
         setExpiresAt(new Date(data.bundle.expiresAt));
       }
     } catch { }
-  }, [cleanup, STORAGE_KEY]);
+  }, [cleanup, STORAGE_KEY, bankBin, accountNo, accountName, qrTemplate]);
 
   const startPolling = useCallback((id: string) => {
     if (pollRef.current) clearInterval(pollRef.current);
@@ -219,20 +237,39 @@ export function QRPaymentDialog({
       setBundleId(data.bundle.id);
       setBundleCode(data.bundle.bundleCode);
       setBundleStatus(data.bundle.status ?? "PENDING");
-      setQrContent(data.qrContent);
-      // Client tự build QR URL ngay — không đợi server trả về
-      const clientQrUrl = (BANK_BIN && ACCOUNT_NO)
-        ? buildClientQRUrl(BANK_BIN, ACCOUNT_NO, process.env.NEXT_PUBLIC_ACCOUNT_NAME ?? "", data.bundle.totalAmount, data.qrContent)
-        : null;
+      if (data.bankBin) setBankBin(data.bankBin);
+      if (data.accountNo) setAccountNo(data.accountNo);
+      if (data.accountName) setAccountName(data.accountName);
+
+      const activeBin = data.bankBin || bankBin || process.env.NEXT_PUBLIC_BANK_BIN || "";
+      const activeAcc = data.accountNo || accountNo || process.env.NEXT_PUBLIC_ACCOUNT_NO || "";
+      const activeName = data.accountName || accountName || process.env.NEXT_PUBLIC_ACCOUNT_NAME || "";
+
+      const clientQrUrl = (activeBin && activeAcc)
+        ? buildClientQRUrl(activeBin, activeAcc, activeName, data.bundle.totalAmount, data.qrContent, qrTemplate)
+        : data.qrUrl || null;
+
       setQrUrl(clientQrUrl);
       setTotalAmount(data.bundle.totalAmount);
       setExpiresAt(new Date(data.bundle.expiresAt));
+      setImgLoadError(false);
       try { localStorage.setItem(STORAGE_KEY, data.bundle.id); } catch {}
       startPolling(data.bundle.id);
     } catch (err: any) {
-      setError(err.message ?? "Co loi xay ra");
+      setError(err.message ?? "Có lỗi xảy ra khi tạo QR");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const toggleTemplate = (newTemplate: "compact2" | "qr_only") => {
+    setQrTemplate(newTemplate);
+    setImgLoadError(false);
+    const activeBin = bankBin || process.env.NEXT_PUBLIC_BANK_BIN || "";
+    const activeAcc = accountNo || process.env.NEXT_PUBLIC_ACCOUNT_NO || "";
+    const activeName = accountName || process.env.NEXT_PUBLIC_ACCOUNT_NAME || "";
+    if (activeBin && activeAcc && qrContent) {
+      setQrUrl(buildClientQRUrl(activeBin, activeAcc, activeName, totalAmount, qrContent, newTemplate));
     }
   };
 
@@ -271,21 +308,28 @@ const BANK_APP_MAP: Record<string, string> = {
     setSaveStatus("saving");
     const fileName = `QR_ThanhToan_${memberCode}_${bundleCode || "FC"}.png`;
     try {
-      const blob = await new Promise<Blob>((resolve, reject) => {
-        const img = new Image();
-        img.crossOrigin = "anonymous";
-        img.onload = () => {
-          const canvas = document.createElement("canvas");
-          canvas.width = img.naturalWidth || 300;
-          canvas.height = img.naturalHeight || 300;
-          const ctx = canvas.getContext("2d");
-          if (!ctx) { reject(new Error("no ctx")); return; }
-          ctx.drawImage(img, 0, 0);
-          canvas.toBlob((b) => { if (b) resolve(b); else reject(new Error("toBlob failed")); }, "image/png");
-        };
-        img.onerror = () => reject(new Error("img load failed"));
-        img.src = qrUrl;
-      });
+      let blob: Blob;
+      try {
+        const resp = await fetch(qrUrl);
+        if (!resp.ok) throw new Error("fetch failed");
+        blob = await resp.blob();
+      } catch {
+        blob = await new Promise<Blob>((resolve, reject) => {
+          const img = new Image();
+          img.crossOrigin = "anonymous";
+          img.onload = () => {
+            const canvas = document.createElement("canvas");
+            canvas.width = img.naturalWidth || 300;
+            canvas.height = img.naturalHeight || 300;
+            const ctx = canvas.getContext("2d");
+            if (!ctx) { reject(new Error("no ctx")); return; }
+            ctx.drawImage(img, 0, 0);
+            canvas.toBlob((b) => { if (b) resolve(b); else reject(new Error("toBlob failed")); }, "image/png");
+          };
+          img.onerror = () => reject(new Error("img load failed"));
+          img.src = qrUrl;
+        });
+      }
 
       const file = new File([blob], fileName, { type: "image/png" });
       const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
@@ -328,11 +372,11 @@ const BANK_APP_MAP: Record<string, string> = {
   };
 
   const handleSelectBankApp = (appCode: string) => {
-    if (!BANK_BIN || !ACCOUNT_NO) return;
+    if (!bankBin || !accountNo) return;
     try { navigator.clipboard.writeText(qrContent); } catch {}
     const encodedContent = encodeURIComponent(qrContent);
-    const encodedName = encodeURIComponent(process.env.NEXT_PUBLIC_ACCOUNT_NAME || "FC Management");
-    const url = `https://dl.vietqr.io/pay?app=${appCode}&ba=${ACCOUNT_NO}@${BANK_BIN}&am=${totalAmount}&tn=${encodedContent}&bn=${encodedName}`;
+    const encodedName = encodeURIComponent(accountName || process.env.NEXT_PUBLIC_ACCOUNT_NAME || "FC Management");
+    const url = `https://dl.vietqr.io/pay?app=${appCode}&ba=${accountNo}@${bankBin}&am=${totalAmount}&tn=${encodedContent}&bn=${encodedName}`;
     window.open(url, "_blank", "noopener,noreferrer");
     setShowBankPicker(false);
   };
@@ -468,15 +512,104 @@ const BANK_APP_MAP: Record<string, string> = {
                   {/* QR Image */}
                   {qrUrl ? (
                     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "10px", width: "100%" }}>
-                      <div style={{ padding: "10px", background: "white", borderRadius: "14px", boxShadow: "0 0 0 1px rgba(34,197,94,0.3), 0 8px 30px rgba(0,0,0,0.4)" }}>
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img
-                          src={qrUrl}
-                          alt="QR thanh toán"
-                          crossOrigin="anonymous"
-                          style={{ width: 190, height: 190, display: "block" }}
-                          onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
-                        />
+                      {/* Switcher giữa Thẻ VietQR và QR đơn giản */}
+                      <div style={{ display: "flex", background: "rgba(255,255,255,0.06)", borderRadius: "8px", padding: "2px", gap: "4px" }}>
+                        <button
+                          type="button"
+                          onClick={() => toggleTemplate("compact2")}
+                          style={{
+                            padding: "4px 10px",
+                            borderRadius: "6px",
+                            border: "none",
+                            background: qrTemplate === "compact2" ? "#22c55e" : "transparent",
+                            color: qrTemplate === "compact2" ? "#052e16" : "#94a3b8",
+                            fontSize: "0.72rem",
+                            fontWeight: 700,
+                            cursor: "pointer",
+                          }}
+                        >
+                          💳 Thẻ VietQR
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => toggleTemplate("qr_only")}
+                          style={{
+                            padding: "4px 10px",
+                            borderRadius: "6px",
+                            border: "none",
+                            background: qrTemplate === "qr_only" ? "#22c55e" : "transparent",
+                            color: qrTemplate === "qr_only" ? "#052e16" : "#94a3b8",
+                            fontSize: "0.72rem",
+                            fontWeight: 700,
+                            cursor: "pointer",
+                          }}
+                        >
+                          📱 QR Đơn Dễ Quét
+                        </button>
+                      </div>
+
+                      <div
+                        style={{
+                          padding: qrTemplate === "compact2" ? "8px" : "12px",
+                          background: "white",
+                          borderRadius: "14px",
+                          boxShadow: "0 0 0 1px rgba(34,197,94,0.3), 0 8px 30px rgba(0,0,0,0.4)",
+                          width: "100%",
+                          maxWidth: qrTemplate === "compact2" ? "250px" : "200px",
+                          minHeight: "180px",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                        }}
+                      >
+                        {!imgLoadError && qrUrl ? (
+                          /* eslint-disable-next-line @next/next/no-img-element */
+                          <img
+                            src={qrUrl}
+                            alt="QR thanh toán VietQR"
+                            style={{
+                              width: "100%",
+                              height: "auto",
+                              aspectRatio: qrTemplate === "compact2" ? "540 / 640" : "1 / 1",
+                              objectFit: "contain",
+                              display: "block",
+                              borderRadius: "6px",
+                            }}
+                            onError={() => {
+                              if (qrTemplate === "compact2") {
+                                toggleTemplate("qr_only");
+                              } else {
+                                setImgLoadError(true);
+                              }
+                            }}
+                          />
+                        ) : (
+                          <div style={{ textAlign: "center", padding: "14px", color: "#334155" }}>
+                            <AlertCircle size={28} color="#ef4444" style={{ margin: "0 auto 6px" }} />
+                            <div style={{ fontSize: "0.75rem", fontWeight: 700, color: "#b91c1c", marginBottom: "6px" }}>
+                              Lỗi tải ảnh VietQR
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setImgLoadError(false);
+                                toggleTemplate(qrTemplate === "compact2" ? "qr_only" : "compact2");
+                              }}
+                              style={{
+                                padding: "4px 10px",
+                                borderRadius: "6px",
+                                background: "#22c55e",
+                                color: "white",
+                                border: "none",
+                                fontSize: "0.72rem",
+                                fontWeight: 700,
+                                cursor: "pointer",
+                              }}
+                            >
+                              Đổi sang QR khác
+                            </button>
+                          </div>
+                        )}
                       </div>
                       <span style={{ fontSize: "0.68rem", color: "#64748b" }}>(Mẹo: Có thể nhấn giữ vào ảnh để lưu nhanh)</span>
 
@@ -484,15 +617,15 @@ const BANK_APP_MAP: Record<string, string> = {
                       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", width: "100%", maxWidth: "300px" }}>
                         <button
                           onClick={handleOpenBankApp}
-                          disabled={!BANK_BIN || !ACCOUNT_NO}
+                          disabled={!bankBin || !accountNo}
                           style={{
                             display: "flex", alignItems: "center", justifyContent: "center", gap: "5px",
                             padding: "9px 6px", borderRadius: "10px",
-                            background: (!BANK_BIN || !ACCOUNT_NO) ? "rgba(34,197,94,0.05)" : "rgba(34,197,94,0.14)",
+                            background: (!bankBin || !accountNo) ? "rgba(34,197,94,0.05)" : "rgba(34,197,94,0.14)",
                             border: "1px solid rgba(34,197,94,0.3)",
-                            color: (!BANK_BIN || !ACCOUNT_NO) ? "#475569" : "#4ade80",
+                            color: (!bankBin || !accountNo) ? "#475569" : "#4ade80",
                             fontSize: "0.76rem", fontWeight: 700,
-                            cursor: (!BANK_BIN || !ACCOUNT_NO) ? "not-allowed" : "pointer",
+                            cursor: (!bankBin || !accountNo) ? "not-allowed" : "pointer",
                           }}
                         >
                           <Smartphone size={13} />

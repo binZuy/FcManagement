@@ -66,7 +66,7 @@ export async function DELETE(_req: NextRequest, { params }: Params) {
 
   const bundle = await prisma.paymentBundle.findUnique({
     where: { id },
-    select: { status: true },
+    select: { status: true, memberId: true, bundleCode: true },
   });
 
   if (!bundle) {
@@ -80,10 +80,24 @@ export async function DELETE(_req: NextRequest, { params }: Params) {
     );
   }
 
-  await prisma.paymentBundle.update({
-    where: { id },
-    data: { status: BundleStatus.CANCELLED },
-  });
+  await prisma.$transaction([
+    prisma.paymentBundle.update({
+      where: { id },
+      data: { status: BundleStatus.CANCELLED },
+    }),
+    prisma.memberReward.updateMany({
+      where: {
+        memberId: bundle.memberId,
+        note: `pending_bundle:${bundle.bundleCode}`,
+        isUsed: true,
+      },
+      data: {
+        isUsed: false,
+        usedAt: null,
+        note: null,
+      },
+    }),
+  ]);
 
   return NextResponse.json({ success: true });
 }

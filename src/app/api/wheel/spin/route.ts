@@ -112,8 +112,13 @@ export async function POST(req: NextRequest) {
     const options = Array.isArray(wheelSetting?.value) ? (wheelSetting.value as any[]) : [];
     const matchedOpt = options.find((o) => o.id === prizeId);
 
-    const discountAmount = matchedOpt?.discountAmount ?? (matchedOpt?.rewardType === "DISCOUNT_5K" ? 5000 : prizeId === "4" ? 5000 : 0);
-    const isFreeMatch = matchedOpt?.isFreeMatch ?? (matchedOpt?.rewardType === "FREE_MATCH" || prizeId === "6");
+    const discountAmount = matchedOpt?.discountAmount ?? (
+      matchedOpt?.rewardType === "DISCOUNT_10K" ? 10000 :
+      matchedOpt?.rewardType === "DISCOUNT_5K" ? 5000 :
+      prizeId === "6" ? 10000 :
+      prizeId === "4" ? 5000 : 0
+    );
+    const isFreeMatch = matchedOpt?.isFreeMatch ?? (matchedOpt?.rewardType === "FREE_MATCH");
     const isFreeDrink = matchedOpt?.isFreeDrink ?? (matchedOpt?.rewardType === "FREE_DRINK" || prizeId === "5");
 
     const [updatedMember, newReward] = await prisma.$transaction([

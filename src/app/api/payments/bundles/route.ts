@@ -57,7 +57,28 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Buoc 2: Song song: don items cu + cancel bundle PENDING cu
+    // Buoc 2: Song song: don items cu + cancel bundle PENDING cu va hoan voucher chua thanh toan
+    const pendingBundles = await prisma.paymentBundle.findMany({
+      where: { memberId, status: BundleStatus.PENDING },
+      select: { bundleCode: true },
+    });
+
+    if (pendingBundles.length > 0) {
+      const oldCodes = pendingBundles.map((b) => `pending_bundle:${b.bundleCode}`);
+      await prisma.memberReward.updateMany({
+        where: {
+          memberId,
+          note: { in: oldCodes },
+          isUsed: true,
+        },
+        data: {
+          isUsed: false,
+          usedAt: null,
+          note: null,
+        },
+      });
+    }
+
     await Promise.all([
       prisma.paymentBundleItem.deleteMany({
         where: {
@@ -72,6 +93,7 @@ export async function POST(req: NextRequest) {
     ]);
 
     // Buoc 3: Tinh toan (pure JS)
+    const bundleCode = generateBundleCode();
     let discount = 0;
     const { rewardId } = body as { rewardId?: string };
     if (rewardId) {
@@ -84,10 +106,14 @@ export async function POST(req: NextRequest) {
         } else if (reward.discountAmount > 0) {
           discount = reward.discountAmount;
         }
-        // Đánh dấu đã dùng voucher
+        // Đánh dấu đã dùng voucher gắn với mã bundle này
         await prisma.memberReward.update({
           where: { id: reward.id },
-          data: { isUsed: true, usedAt: new Date() },
+          data: {
+            isUsed: true,
+            usedAt: new Date(),
+            note: `pending_bundle:${bundleCode}`,
+          },
         });
       }
     }
@@ -97,8 +123,7 @@ export async function POST(req: NextRequest) {
       0
     );
     const totalAmount = Math.max(0, rawTotalAmount - discount);
-    const bundleCode = generateBundleCode();
-    const prefix = process.env.NEXT_PUBLIC_TRANSFER_PREFIX ?? "FCKX";
+    const prefix = process.env.NEXT_PUBLIC_TRANSFER_PREFIX ?? "FCKTX";
     const qrContent = `${prefix} ${member.code}-${bundleCode}`;
     const expiresAt = new Date(Date.now() + 30 * 60 * 1000);
 
@@ -122,7 +147,19 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    // qrUrl khong tra ve - client tu build tu NEXT_PUBLIC_* env vars
+    const bankBin = process.env.NEXT_PUBLIC_BANK_BIN || "";
+    const accountNo = process.env.NEXT_PUBLIC_ACCOUNT_NO || "";
+    const accountName = process.env.NEXT_PUBLIC_ACCOUNT_NAME || "";
+    let qrUrl: string | null = null;
+    if (bankBin && accountNo) {
+      const q = new URLSearchParams({
+        amount: String(Math.round(totalAmount)),
+        addInfo: qrContent,
+        accountName,
+      });
+      qrUrl = `https://img.vietqr.io/image/${bankBin}-${accountNo}-compact2.png?${q.toString()}`;
+    }
+
     return NextResponse.json({
       success: true,
       bundle: {
@@ -133,6 +170,10 @@ export async function POST(req: NextRequest) {
         expiresAt: bundle.expiresAt,
       },
       qrContent,
+      qrUrl,
+      bankBin,
+      accountNo,
+      accountName,
     });
   } catch (err) {
     console.error("[PaymentBundle POST] Error:", err);
