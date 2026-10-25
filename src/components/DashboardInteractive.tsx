@@ -383,7 +383,7 @@ export function DashboardInteractive({
               </div>
               <div>
                 <h3 style={{ fontSize: "1.05rem", fontWeight: 800, color: "#facc15", display: "flex", alignItems: "center", gap: "6px" }}>
-                  MOTM Gần Nhất ⭐
+                  MOTM ⭐
                 </h3>
                 <div style={{ fontSize: "0.72rem", color: "var(--muted-foreground)" }}>
                   {lastDoneMatch.title} ({formatDate(lastDoneMatch.matchDate)})
@@ -455,7 +455,7 @@ export function DashboardInteractive({
               color: "var(--muted-foreground)",
               textAlign: "center"
             }}>
-              Chưa bình chọn MOTM cho trận này · Admin có thể vào cập nhật chi tiết để vinh danh
+              Chưa bình chọn MOTM cho trận này
             </div>
           )}
 
@@ -491,10 +491,7 @@ export function DashboardInteractive({
           <div style={{ borderTop: "1px solid rgba(255,255,255,0.08)", paddingTop: "12px", display: "flex", flexDirection: "column", gap: "10px" }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
               <span style={{ fontSize: "0.8rem", fontWeight: 700, color: "var(--card-foreground)", display: "flex", alignItems: "center", gap: "6px" }}>
-                <MessageCircle size={15} color="var(--primary)" /> Bình luận & Tương tác ({comments.length})
-              </span>
-              <span style={{ fontSize: "0.7rem", color: "var(--muted-foreground)" }}>
-                Gõ @ để tag anh em
+                <MessageCircle size={15} color="var(--primary)" /> Bình luận ({comments.length})
               </span>
             </div>
 
@@ -528,7 +525,7 @@ export function DashboardInteractive({
                   ref={textareaRef}
                   value={commentInput}
                   onChange={handleCommentChange}
-                  placeholder={currentUser ? `Bình luận dưới tên ${currentUser.name}... (Gõ @ để tag)` : "Viết bình luận chém gió... (Gõ @ để tag)"}
+                  placeholder={currentUser ? `Bình luận dưới tên ${currentUser.name}...` : "Viết bình luận..."}
                   rows={2}
                   style={{
                     width: "100%",

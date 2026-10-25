@@ -6,6 +6,7 @@ import { notFound } from "next/navigation";
 import { ArrowLeft, Mail, Phone, Hash, CheckCircle } from "lucide-react";
 import { RecordStatus } from "@prisma/client";
 import { UnpaidSection } from "@/components/UnpaidSection";
+import { ensureMemberLatePenaltyRecord, LATE_PENALTY_SESSION_CODE } from "@/lib/fee-calculator";
 
 const RECORD_STATUS: Record<string, { label: string; cls: string; color: string }> = {
   PENDING: { label: "Chưa đóng", cls: "badge-pending", color: "#facc15" },
@@ -20,6 +21,9 @@ export default async function MemberPaymentDetailPage({ params }: Params) {
   const { id } = await params;
   const session = await auth();
   const isAdmin = session?.user?.role === "ADMIN";
+
+  // Tự động kiểm tra và đồng bộ khoản phạt nộp chậm vào database nếu thành viên nợ >= 4 trận
+  await ensureMemberLatePenaltyRecord(id);
 
   const member = await prisma.member.findUnique({
     where: { id },
@@ -43,18 +47,25 @@ export default async function MemberPaymentDetailPage({ params }: Params) {
 
   if (!member) notFound();
 
-  // Tách biệt record chưa đóng (bao gồm cả đóng 1 phần) và đã đóng xong
-  const unpaidRecords = member.paymentRecords.filter(
-    (r) => r.status !== RecordStatus.WAIVED && (r.amountRequired - r.amountPaid) > 0
+  // Tách biệt record các trận đá bóng và khoản phạt nộp chậm
+  const matchUnpaidRecords = member.paymentRecords.filter(
+    (r) =>
+      r.status !== RecordStatus.WAIVED &&
+      r.amountRequired - r.amountPaid > 0 &&
+      r.session.code !== LATE_PENALTY_SESSION_CODE
   );
-  const paidRecords = member.paymentRecords
-    .filter(
-      (r) => r.status === RecordStatus.WAIVED || (r.amountRequired - r.amountPaid) <= 0
-    )
-    .slice(0, 20);
+  const penaltyUnpaidRecords = member.paymentRecords.filter(
+    (r) =>
+      r.status !== RecordStatus.WAIVED &&
+      r.amountRequired - r.amountPaid > 0 &&
+      r.session.code === LATE_PENALTY_SESSION_CODE
+  );
+
+  // Khoản phạt nộp chậm được xếp ở CUỐI CÙNG như một khoản riêng lẻ các trận
+  const unpaidRecords = [...matchUnpaidRecords, ...penaltyUnpaidRecords];
 
   const totalPaidCount = member.paymentRecords.filter(
-    (r) => (r.amountRequired - r.amountPaid) <= 0
+    (r) => (r.amountRequired - r.amountPaid) <= 0 && r.session.code !== LATE_PENALTY_SESSION_CODE
   ).length;
   const totalPaidAmount = member.paymentRecords
     .filter((r) => r.status === RecordStatus.PAID)
@@ -63,6 +74,9 @@ export default async function MemberPaymentDetailPage({ params }: Params) {
     (sum, r) => sum + (r.amountRequired - r.amountPaid),
     0
   );
+  const totalMatchCount = member.paymentRecords.filter(
+    (r) => r.session.code !== LATE_PENALTY_SESSION_CODE
+  ).length;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "28px" }}>
@@ -211,7 +225,7 @@ export default async function MemberPaymentDetailPage({ params }: Params) {
           }}
         >
           {[
-            { label: "Tổng số trận", value: member.paymentRecords.length },
+            { label: "Tổng số trận", value: `${totalMatchCount} trận` },
             { label: "Đã đóng hoàn thành", value: `${totalPaidCount} trận` },
             {
               label: "Tổng số tiền đã đóng",

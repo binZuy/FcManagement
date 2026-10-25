@@ -243,7 +243,16 @@ export function LuckyWheelClient({ currentUser, loggedInMemberId }: LuckyWheelCl
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    const size = canvas.width;
+    // Retina / HiDPI sharp rendering
+    const dpr = typeof window !== "undefined" ? Math.max(window.devicePixelRatio || 1, 2) : 2;
+    const logicalSize = 300;
+    canvas.width = logicalSize * dpr;
+    canvas.height = logicalSize * dpr;
+
+    ctx.save();
+    ctx.scale(dpr, dpr);
+
+    const size = logicalSize;
     const center = size / 2;
     const radius = center - 14;
     const sliceAngle = (2 * Math.PI) / wheelSlices.length;
@@ -314,9 +323,9 @@ export function LuckyWheelClient({ currentUser, loggedInMemberId }: LuckyWheelCl
       ctx.rotate(midAngle);
       ctx.textAlign = "right";
       ctx.fillStyle = "#f8fafc";
-      ctx.font = "bold 11px system-ui, -apple-system, sans-serif";
-      ctx.shadowColor = "rgba(0,0,0,0.9)";
-      ctx.shadowBlur = 5;
+      ctx.font = "bold 11.5px Inter, system-ui, -apple-system, sans-serif";
+      ctx.shadowColor = "rgba(0,0,0,0.85)";
+      ctx.shadowBlur = 3;
 
       const labelText = slice.label.length > 15 ? slice.label.slice(0, 13) + ".." : slice.label;
       ctx.fillText(`${slice.icon} ${labelText}`, radius - 15, 4);
@@ -379,10 +388,12 @@ export function LuckyWheelClient({ currentUser, loggedInMemberId }: LuckyWheelCl
 
     // Chữ SPIN mạ vàng sắc nét
     ctx.fillStyle = "#0f172a";
-    ctx.font = "900 10px system-ui, sans-serif";
+    ctx.font = "900 10px Inter, system-ui, sans-serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.fillText("SPIN", center, center + 0.5);
+
+    ctx.restore();
   }, [baseOptions, wheelSlices]);
 
   // Thuật toán quay theo Tỉ lệ ảo
@@ -739,12 +750,46 @@ export function LuckyWheelClient({ currentUser, loggedInMemberId }: LuckyWheelCl
               </div>
             </div>
 
-            {/* Canvas Wheel */}
+            {/* Canvas Wheel with 24 Fairy LED Bulbs Around the Perimeter */}
             <div style={{ width: "300px", height: "300px", position: "relative", marginTop: "12px" }}>
+              {/* 24 Đèn LED viền nhấp nháy sang trọng xung quanh hình tròn */}
+              <div
+                className={isSpinning ? "wheel-spinning-lights" : ""}
+                style={{
+                  position: "absolute",
+                  inset: "-11px",
+                  borderRadius: "50%",
+                  pointerEvents: "none",
+                  zIndex: 10,
+                }}
+              >
+                {Array.from({ length: 24 }).map((_, idx) => {
+                  const angle = (idx * 360) / 24;
+                  const rad = (angle * Math.PI) / 180;
+                  const x = 50 + 49 * Math.cos(rad);
+                  const y = 50 + 49 * Math.sin(rad);
+                  const isOdd = idx % 2 === 1;
+                  return (
+                    <span
+                      key={idx}
+                      className={isOdd ? "wheel-bulb-odd" : "wheel-bulb-even"}
+                      style={{
+                        position: "absolute",
+                        left: `${x}%`,
+                        top: `${y}%`,
+                        transform: "translate(-50%, -50%)",
+                        width: "8px",
+                        height: "8px",
+                        borderRadius: "50%",
+                        animationDelay: isSpinning ? "0s" : `${(idx % 6) * 0.18}s`,
+                      }}
+                    />
+                  );
+                })}
+              </div>
+
               <canvas
                 ref={canvasRef}
-                width={300}
-                height={300}
                 style={{
                   width: "100%",
                   height: "100%",

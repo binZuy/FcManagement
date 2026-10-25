@@ -382,3 +382,112 @@ input[type="datetime-local"]::-webkit-calendar-picker-indicator {
   filter: invert(0.8);
   cursor: pointer;
 }
+
+/* Page Transition: mượt mà sống động khi chuyển giữa các màn hình */
+@keyframes pageFadeInUp {
+  0% {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.page-transition {
+  animation: pageFadeInUp 0.32s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Ambient light sweep on cards ("tự dưng có đèn đi qua cả card") */
+@keyframes ambientCardSweep {
+  0%, 75% {
+    left: -140%;
+    opacity: 0;
+  }
+  80% {
+    opacity: 0.9;
+  }
+  92%, 100% {
+    left: 140%;
+    opacity: 0;
+  }
+}
+
+.glass-card, .stat-card {
+  position: relative;
+  overflow: hidden;
+}
+
+.glass-card::after, .stat-card::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -140%;
+  width: 50%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.02) 20%,
+    rgba(255, 255, 255, 0.14) 50%,
+    rgba(34, 197, 94, 0.16) 65%,
+    transparent 100%
+  );
+  transform: skewX(-25deg);
+  pointer-events: none;
+  animation: ambientCardSweep 11s infinite cubic-bezier(0.4, 0, 0.2, 1);
+  z-index: 1;
+}
+
+/* Stagger different cards so lights glide naturally across them */
+.glass-card:nth-of-type(2)::after, .stat-card:nth-of-type(2)::after {
+  animation-delay: 2.8s;
+}
+.glass-card:nth-of-type(3)::after, .stat-card:nth-of-type(3)::after {
+  animation-delay: 5.5s;
+}
+.glass-card:nth-of-type(4)::after, .stat-card:nth-of-type(4)::after {
+  animation-delay: 8.2s;
+}
+
+/* Hiệu ứng đèn LED viền tròn nhấp nháy cho Vòng Quay May Mắn */
+@keyframes wheelBulbBlinkOdd {
+  0%, 100% {
+    background-color: #fef08a;
+    box-shadow: 0 0 10px #facc15, 0 0 18px #eab308;
+    transform: scale(1.15);
+  }
+  50% {
+    background-color: #713f12;
+    box-shadow: 0 0 2px rgba(234, 179, 8, 0.2);
+    transform: scale(0.9);
+  }
+}
+
+@keyframes wheelBulbBlinkEven {
+  0%, 100% {
+    background-color: #713f12;
+    box-shadow: 0 0 2px rgba(234, 179, 8, 0.2);
+    transform: scale(0.9);
+  }
+  50% {
+    background-color: #ffffff;
+    box-shadow: 0 0 12px #60a5fa, 0 0 20px #38bdf8;
+    transform: scale(1.15);
+  }
+}
+
+.wheel-bulb-odd {
+  animation: wheelBulbBlinkOdd 1.2s infinite ease-in-out;
+}
+.wheel-bulb-even {
+  animation: wheelBulbBlinkEven 1.2s infinite ease-in-out;
+}
+.wheel-spinning-lights .wheel-bulb-odd {
+  animation: wheelBulbBlinkOdd 0.22s infinite ease-in-out;
+}
+.wheel-spinning-lights .wheel-bulb-even {
+  animation: wheelBulbBlinkEven 0.22s infinite ease-in-out;
+}
+

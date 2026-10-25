@@ -209,9 +209,6 @@ export function Sidebar({
           >
             👍 Fanpage FC KTX
           </a>
-          <div style={{ fontSize: "0.64rem", color: "#64748b", lineHeight: 1.2 }}>
-            (Ai chưa like cho mình xin 1 like & 1 theo dõi nhé!)
-          </div>
         </div>
       )}
 

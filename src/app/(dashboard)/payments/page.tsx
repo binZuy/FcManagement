@@ -5,11 +5,14 @@ import Link from "next/link";
 import { Wallet, Users, CheckCircle, AlertCircle, ChevronRight } from "lucide-react";
 import { RecordStatus } from "@prisma/client";
 
-import { calculateLatePenalty } from "@/lib/fee-calculator";
+import { calculateLatePenalty, ensureAllLatePenaltyRecords, LATE_PENALTY_SESSION_CODE } from "@/lib/fee-calculator";
 
 export default async function PaymentsPage() {
   const session = await auth();
   const isAdmin = session?.user?.role === "ADMIN";
+
+  // Tự động kiểm tra và đồng bộ khoản phạt nộp chậm vào database cho các thành viên nợ >= 4 trận
+  await ensureAllLatePenaltyRecords();
 
   const members = await prisma.member.findMany({
     include: {
@@ -18,7 +21,13 @@ export default async function PaymentsPage() {
         where: {
           status: { in: [RecordStatus.PENDING, RecordStatus.OVERDUE] },
         },
-        select: { status: true, amountRequired: true, amountPaid: true, createdAt: true },
+        select: {
+          status: true,
+          amountRequired: true,
+          amountPaid: true,
+          createdAt: true,
+          session: { select: { code: true } },
+        },
       },
     },
   });
@@ -27,9 +36,13 @@ export default async function PaymentsPage() {
     const unpaidRecords = m.paymentRecords.filter(
       (r) => r.status !== RecordStatus.PAID && r.status !== RecordStatus.WAIVED
     );
-    const unpaidCount = unpaidRecords.length;
-    const baseDebt = unpaidRecords.reduce((sum, r) => sum + (r.amountRequired - r.amountPaid), 0);
-    const penalty = calculateLatePenalty(unpaidRecords);
+    // Tách riêng các khoản đá bóng và khoản phạt nộp chậm
+    const matchUnpaidRecords = unpaidRecords.filter(
+      (r) => r.session?.code !== LATE_PENALTY_SESSION_CODE
+    );
+    const unpaidCount = matchUnpaidRecords.length;
+    const baseDebt = matchUnpaidRecords.reduce((sum, r) => sum + (r.amountRequired - r.amountPaid), 0);
+    const penalty = calculateLatePenalty(matchUnpaidRecords);
     const debt = baseDebt + penalty.lateFee;
 
     return {
@@ -195,7 +208,7 @@ export default async function PaymentsPage() {
                       </div>
                       {isPenalized && (
                         <div style={{ fontSize: "0.74rem", color: "#f87171", marginTop: "3px", fontWeight: 600 }}>
-                          Gốc: {formatCurrency(member.baseDebt)} + Phạt trễ ({member.penalty.daysLate} ngày): +{formatCurrency(member.penalty.lateFee)}
+                          {formatCurrency(member.baseDebt)} + Nộp chậm: {formatCurrency(member.penalty.lateFee)}
                         </div>
                       )}
                     </div>
@@ -207,7 +220,7 @@ export default async function PaymentsPage() {
                         {hasDebt ? formatCurrency(member.debt) : "Đã hoàn thành"}
                       </div>
                       <div style={{ fontSize: "0.72rem", color: isPenalized ? "#f87171" : "var(--muted-foreground)", marginTop: "2px" }}>
-                        {isPenalized ? "Bao gồm phí phạt nộp chậm" : hasDebt ? "Cần thanh toán" : "Đã đóng đủ"}
+                        {hasDebt ? "Cần thanh toán" : "Đã đóng đủ"}
                       </div>
                     </div>
                     <ChevronRight size={18} style={{ color: "var(--muted-foreground)", opacity: 0.5 }} />

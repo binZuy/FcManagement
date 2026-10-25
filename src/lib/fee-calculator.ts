@@ -1,5 +1,8 @@
-import { MatchResult, MatchType } from "@prisma/client";
+import { MatchResult, MatchType, PaymentType, PaymentStatus, RecordStatus } from "@prisma/client";
 import { FeeSplitMethod, FEE_SPLIT_METHOD, FEE_SPLIT_RATIOS } from "./constants";
+import { prisma } from "./prisma";
+
+export const LATE_PENALTY_SESSION_CODE = "LATE_PENALTY";
 
 export interface FeeConfig {
   matchType: MatchType;
@@ -141,3 +144,126 @@ export function calculateLatePenalty(unpaidRecords: { createdAt: Date | string }
     daysLate,
   };
 }
+
+/**
+ * Tự động tạo hoặc đồng bộ bản ghi phạt nộp chậm (LATE_PENALTY) vào cơ sở dữ liệu:
+ * - Khi thành viên nợ >= 4 trận: Tạo hoặc cập nhật PaymentRecord phạt nộp chậm
+ * - Khi thành viên nợ < 4 trận: Tự động dọn dẹp bản ghi phạt nộp chậm PENDING nếu có
+ */
+export async function ensureMemberLatePenaltyRecord(memberId: string) {
+  try {
+    const member = await prisma.member.findUnique({
+      where: { id: memberId },
+      include: {
+        paymentRecords: {
+          where: {
+            status: { in: [RecordStatus.PENDING, RecordStatus.OVERDUE] },
+          },
+          include: {
+            session: { select: { id: true, code: true, type: true } },
+          },
+          orderBy: { createdAt: "asc" },
+        },
+      },
+    });
+
+    if (!member) return null;
+
+    // Chỉ tính các trận bóng thực tế (bỏ qua bản ghi phạt)
+    const matchUnpaidRecords = member.paymentRecords.filter(
+      (r) => r.session.code !== LATE_PENALTY_SESSION_CODE
+    );
+
+    const penalty = calculateLatePenalty(matchUnpaidRecords);
+
+    let penaltySession = await prisma.paymentSession.findUnique({
+      where: { code: LATE_PENALTY_SESSION_CODE },
+    });
+
+    if (penalty.isPenalized) {
+      if (!penaltySession) {
+        penaltySession = await prisma.paymentSession.create({
+          data: {
+            code: LATE_PENALTY_SESSION_CODE,
+            title: "Phạt nộp chậm (quá hạn ≥ 4 trận)",
+            description: "Khoản phạt nộp chậm tự động kích hoạt khi có từ 4 trận chưa thanh toán",
+            type: PaymentType.CUSTOM,
+            status: PaymentStatus.OPEN,
+          },
+        });
+      }
+
+      // Tìm bản ghi phạt nộp chậm hiện tại của member
+      const existingPenaltyRecord = await prisma.paymentRecord.findUnique({
+        where: {
+          sessionId_memberId: {
+            sessionId: penaltySession.id,
+            memberId: member.id,
+          },
+        },
+      });
+
+      if (!existingPenaltyRecord) {
+        await prisma.paymentRecord.create({
+          data: {
+            sessionId: penaltySession.id,
+            memberId: member.id,
+            amountRequired: penalty.lateFee,
+            amountPaid: 0,
+            status: RecordStatus.PENDING,
+            note: `Quá hạn ${penalty.daysLate} ngày (kích hoạt từ trận thứ 4)`,
+          },
+        });
+      } else if (
+        existingPenaltyRecord.status === RecordStatus.PENDING ||
+        existingPenaltyRecord.status === RecordStatus.OVERDUE
+      ) {
+        if (
+          existingPenaltyRecord.amountRequired !== penalty.lateFee ||
+          !existingPenaltyRecord.note?.includes(`${penalty.daysLate} ngày`)
+        ) {
+          await prisma.paymentRecord.update({
+            where: { id: existingPenaltyRecord.id },
+            data: {
+              amountRequired: penalty.lateFee,
+              note: `Quá hạn ${penalty.daysLate} ngày (kích hoạt từ trận thứ 4)`,
+            },
+          });
+        }
+      }
+    } else {
+      // Nếu thành viên không còn bị phạt, xóa bản ghi phạt nộp chậm chưa đóng nếu có
+      if (penaltySession) {
+        await prisma.paymentRecord.deleteMany({
+          where: {
+            sessionId: penaltySession.id,
+            memberId: member.id,
+            status: { in: [RecordStatus.PENDING, RecordStatus.OVERDUE] },
+          },
+        });
+      }
+    }
+
+    return penalty;
+  } catch (error) {
+    console.error("Lỗi khi đồng bộ phạt nộp chậm cho thành viên:", error);
+    return null;
+  }
+}
+
+/**
+ * Đồng bộ phạt nộp chậm cho toàn bộ thành viên
+ */
+export async function ensureAllLatePenaltyRecords() {
+  try {
+    const members = await prisma.member.findMany({
+      select: { id: true },
+    });
+    for (const m of members) {
+      await ensureMemberLatePenaltyRecord(m.id);
+    }
+  } catch (error) {
+    console.error("Lỗi khi đồng bộ toàn bộ phạt nộp chậm:", error);
+  }
+}
+

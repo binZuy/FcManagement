@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { usePathname } from "next/navigation";
 import { Sidebar } from "@/components/Sidebar";
 import { Header } from "@/components/Header";
 import { ToastContainer } from "@/components/Toast";
@@ -20,6 +21,7 @@ export function DashboardLayoutClient({
   userEmail,
   children,
 }: DashboardLayoutClientProps) {
+  const pathname = usePathname();
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
 
@@ -63,7 +65,9 @@ export function DashboardLayoutClient({
             isSidebarCollapsed={isCollapsed}
             onToggleSidebar={handleToggleSidebar}
           />
-          {children}
+          <div key={pathname} className="page-transition">
+            {children}
+          </div>
         </div>
       </main>
     </div>

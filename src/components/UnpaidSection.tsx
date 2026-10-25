@@ -135,6 +135,9 @@ export function UnpaidSection({
     0
   );
 
+  const matchCount = unpaidRecords.filter((r) => r.session.code !== "LATE_PENALTY").length;
+  const hasPenalty = unpaidRecords.some((r) => r.session.code === "LATE_PENALTY");
+
   return (
     <div
       className="glass-card"
@@ -169,7 +172,9 @@ export function UnpaidSection({
           }}
         >
           <AlertCircle size={17} />
-          Các trận chưa đóng ({unpaidRecords.length})
+          {hasPenalty
+            ? `Các khoản chưa đóng (${matchCount} trận + 1 khoản phạt)`
+            : `Các trận chưa đóng (${unpaidRecords.length})`}
         </h2>
 
         {/* Banner Voucher Giảm Giá (nếu thành viên có) */}
@@ -345,9 +350,12 @@ export function UnpaidSection({
           const cfg = RECORD_STATUS[r.status] ?? { label: r.status, color: "white" };
           const outstanding = r.amountRequired - r.amountPaid;
           const isSelected = selectedIds.has(r.id);
+          const isPenalty = r.session.code === "LATE_PENALTY";
 
-          const cleanTitle = r.session.title.replace(/^Tiền sân:\s*/i, "").replace(/^Tiền sân\s*-\s*/i, "");
-          const isOnlyGuestDebt = r.amountPaid > 0 && !!r.note;
+          const cleanTitle = isPenalty
+            ? "🚨 Phạt nộp chậm (quá hạn ≥ 4 trận)"
+            : r.session.title.replace(/^Tiền sân:\s*/i, "").replace(/^Tiền sân\s*-\s*/i, "");
+          const isOnlyGuestDebt = !isPenalty && r.amountPaid > 0 && !!r.note;
 
           return (
             <div
@@ -359,8 +367,20 @@ export function UnpaidSection({
                 gap: "12px",
                 padding: "12px 14px",
                 borderRadius: "10px",
-                background: isSelected ? "rgba(34,197,94,0.06)" : "rgba(239,68,68,0.04)",
-                border: isSelected ? "1px solid rgba(34,197,94,0.3)" : "1px solid rgba(239,68,68,0.08)",
+                background: isPenalty
+                  ? isSelected
+                    ? "rgba(239,68,68,0.12)"
+                    : "rgba(239,68,68,0.04)"
+                  : isSelected
+                  ? "rgba(34,197,94,0.06)"
+                  : "rgba(239,68,68,0.04)",
+                border: isPenalty
+                  ? isSelected
+                    ? "1px solid rgba(239,68,68,0.45)"
+                    : "1px solid rgba(239,68,68,0.2)"
+                  : isSelected
+                  ? "1px solid rgba(34,197,94,0.3)"
+                  : "1px solid rgba(239,68,68,0.08)",
                 cursor: "pointer",
                 transition: "all 0.15s",
                 userSelect: "none",
@@ -372,8 +392,20 @@ export function UnpaidSection({
                   width: 20,
                   height: 20,
                   borderRadius: "5px",
-                  border: isSelected ? "2px solid #22c55e" : "2px solid #334155",
-                  background: isSelected ? "#22c55e" : "transparent",
+                  border: isPenalty
+                    ? isSelected
+                      ? "2px solid #ef4444"
+                      : "2px solid #7f1d1d"
+                    : isSelected
+                    ? "2px solid #22c55e"
+                    : "2px solid #334155",
+                  background: isPenalty
+                    ? isSelected
+                      ? "#ef4444"
+                      : "transparent"
+                    : isSelected
+                    ? "#22c55e"
+                    : "transparent",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
@@ -393,7 +425,7 @@ export function UnpaidSection({
                   style={{
                     fontSize: "0.85rem",
                     fontWeight: 700,
-                    color: isOnlyGuestDebt ? "#fb923c" : "var(--card-foreground)",
+                    color: isPenalty ? "#f87171" : isOnlyGuestDebt ? "#fb923c" : "var(--card-foreground)",
                     overflow: "hidden",
                     textOverflow: "ellipsis",
                     whiteSpace: "nowrap",
@@ -402,7 +434,11 @@ export function UnpaidSection({
                   {cleanTitle}
                 </div>
 
-                {(isOnlyGuestDebt || r.note) && (
+                {isPenalty ? (
+                  <div style={{ fontSize: "0.75rem", color: "#f87171", fontWeight: 600, marginTop: "2px" }}>
+                    {r.note ?? "Khoản phạt nộp chậm theo quy chế đóng quỹ FC KTX"}
+                  </div>
+                ) : (isOnlyGuestDebt || r.note) ? (
                   <div style={{ fontSize: "0.75rem", color: "#fb923c", fontWeight: 600, marginTop: "2px" }}>
                     {isOnlyGuestDebt ? (
                       "• Bạn"
@@ -410,9 +446,10 @@ export function UnpaidSection({
                       `• ${r.note.replace("Khách đi cùng", "Bạn").replace("Bạn đi cùng", "Bạn").replace("+", "")}`
                     ) : null}
                   </div>
-                )}
+                ) : null}
+
                 {/* Chỉ hiển thị hạn nộp nếu có — bỏ status & yêu cầu vì thừa */}
-                {r.session.dueDate && (
+                {!isPenalty && r.session.dueDate && (
                   <div style={{ fontSize: "0.72rem", color: "var(--muted-foreground)", marginTop: "3px" }}>
                     Hạn: {formatDate(r.session.dueDate)}
                   </div>
@@ -430,9 +467,17 @@ export function UnpaidSection({
                 }}
               >
                 <div
-                  style={{ fontSize: "0.9rem", fontWeight: 800, color: isSelected ? "#22c55e" : "#f87171" }}
+                  style={{
+                    fontSize: "0.9rem",
+                    fontWeight: 800,
+                    color: isPenalty
+                      ? "#f87171"
+                      : isSelected
+                      ? "#22c55e"
+                      : "#f87171",
+                  }}
                 >
-                  {formatCurrency(outstanding)}
+                  {isPenalty ? `+${formatCurrency(outstanding)}` : formatCurrency(outstanding)}
                 </div>
                 {isAdmin && (
                   <div onClick={(e) => e.stopPropagation()}>
