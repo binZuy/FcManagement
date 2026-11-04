@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 import { RecordStatus } from "@prisma/client";
+import { deductFromRewardPool, getRewardPoolBalance } from "@/lib/rewardPool";
 
 export const dynamic = "force-dynamic";
 
@@ -32,7 +33,8 @@ export async function GET() {
       createdAt: h.createdAt,
     }));
 
-    return NextResponse.json({ success: true, history: formatted });
+    const poolBalance = await getRewardPoolBalance();
+    return NextResponse.json({ success: true, history: formatted, poolBalance });
   } catch (error: any) {
     console.error("Lỗi lấy lịch sử quay:", error);
     return NextResponse.json({ error: error.message || "Lỗi server" }, { status: 500 });
@@ -115,11 +117,13 @@ export async function POST(req: NextRequest) {
     const discountAmount = matchedOpt?.discountAmount ?? (
       matchedOpt?.rewardType === "DISCOUNT_10K" ? 10000 :
       matchedOpt?.rewardType === "DISCOUNT_5K" ? 5000 :
+      matchedOpt?.rewardType === "DISCOUNT_2K" ? 2000 :
       prizeId === "6" ? 10000 :
-      prizeId === "4" ? 5000 : 0
+      prizeId === "5" ? 5000 :
+      prizeId === "4" ? 2000 : 0
     );
-    const isFreeMatch = matchedOpt?.isFreeMatch ?? (matchedOpt?.rewardType === "FREE_MATCH");
-    const isFreeDrink = matchedOpt?.isFreeDrink ?? (matchedOpt?.rewardType === "FREE_DRINK" || prizeId === "5");
+    const isFreeMatch = matchedOpt?.isFreeMatch ?? (matchedOpt?.rewardType === "FREE_MATCH" || prizeId === "8");
+    const isFreeDrink = matchedOpt?.isFreeDrink ?? (matchedOpt?.rewardType === "FREE_DRINK" || prizeId === "7");
 
     const [updatedMember, newReward] = await prisma.$transaction([
       prisma.member.update({
@@ -141,6 +145,11 @@ export async function POST(req: NextRequest) {
         },
       }),
     ]);
+
+    // Trừ quỹ thưởng nếu trúng voucher discount tiền
+    if (discountAmount > 0) {
+      await deductFromRewardPool(discountAmount, `Trúng voucher ${label} của ${member.user?.name || member.code}`);
+    }
 
     return NextResponse.json({
       success: true,

@@ -3,6 +3,8 @@ import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 import { Role, RecordStatus, PayMethod } from "@prisma/client";
 import { checkAndAwardCleanPaymentSpin } from "@/lib/rewards";
+import { addToRewardPool } from "@/lib/rewardPool";
+import { LATE_PENALTY_SESSION_CODE } from "@/lib/fee-calculator";
 
 // POST /api/payments/records/bulk-paid — Bulk mark records as paid
 export async function POST(req: NextRequest) {
@@ -76,6 +78,13 @@ export async function POST(req: NextRequest) {
     // Kiểm tra và thưởng 1 lượt quay nếu thành viên đã thanh toán sạch toàn bộ bill
     const uniqueMemberIds = Array.from(new Set(records.map((r) => r.memberId)));
     await Promise.all(uniqueMemberIds.map((mId) => checkAndAwardCleanPaymentSpin(mId)));
+
+    // Cộng vào Quỹ thưởng các khoản phạt nộp chậm được thanh toán
+    for (const r of records) {
+      if (r.session?.code === LATE_PENALTY_SESSION_CODE && r.amountRequired > 0) {
+        await addToRewardPool(r.amountRequired, `Bulk paid nộp phạt chậm của member ${r.memberId}`);
+      }
+    }
 
     return NextResponse.json({
       success: true,

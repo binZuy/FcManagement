@@ -22,6 +22,7 @@ interface QRPaymentDialogProps {
   selectedRecordIds: string[];
   selectedTotalAmount: number;
   rewardId?: string | null;
+  rewardIds?: string[];
 }
 
 type DialogStep = "qr" | "success";
@@ -82,6 +83,7 @@ export function QRPaymentDialog({
   selectedRecordIds,
   selectedTotalAmount,
   rewardId,
+  rewardIds,
 }: QRPaymentDialogProps) {
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState<DialogStep>("qr");
@@ -233,10 +235,16 @@ export function QRPaymentDialog({
     setError(null);
     setSaveStatus("idle");
     try {
+      const targetIds = rewardIds && rewardIds.length > 0 ? rewardIds : (rewardId ? [rewardId] : []);
       const res = await fetch("/api/payments/bundles", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ memberId, recordIds: selectedRecordIds, rewardId: rewardId || undefined }),
+        body: JSON.stringify({
+          memberId,
+          recordIds: selectedRecordIds,
+          rewardId: targetIds[0] || undefined,
+          rewardIds: targetIds.length > 0 ? targetIds : undefined,
+        }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Có lỗi xảy ra khi tạo QR");

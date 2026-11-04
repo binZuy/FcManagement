@@ -96,6 +96,7 @@ export function LuckyWheelClient({ currentUser, loggedInMemberId }: LuckyWheelCl
   const [winningPrize, setWinningPrize] = useState<WheelOption | null>(null);
   const [showWinnerModal, setShowWinnerModal] = useState<boolean>(false);
   const [history, setHistory] = useState<SpinHistoryItem[]>([]);
+  const [poolBalance, setPoolBalance] = useState<number>(0);
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const audioCtxRef = useRef<AudioContext | null>(null);
@@ -140,6 +141,9 @@ export function LuckyWheelClient({ currentUser, loggedInMemberId }: LuckyWheelCl
       const data = await res.json();
       if (data.success && Array.isArray(data.history)) {
         setHistory(data.history);
+      }
+      if (typeof data.poolBalance === "number") {
+        setPoolBalance(data.poolBalance);
       }
     } catch (e) {
       console.error("Lỗi tải lịch sử quay:", e);
@@ -609,9 +613,31 @@ export function LuckyWheelClient({ currentUser, loggedInMemberId }: LuckyWheelCl
           <h1 style={{ fontSize: "1.6rem", fontWeight: 900, color: "var(--card-foreground)", display: "flex", alignItems: "center", gap: "8px" }}>
             Vòng Quay May Mắn 🎡✨
           </h1>
-          <p style={{ fontSize: "0.82rem", color: "var(--muted-foreground)" }}>
-            Đóng đủ quỹ là có quà · Quẩy ngay nhận Voucher 5k & Free sân cực cháy 🔥
-          </p>
+          <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap", marginTop: "4px" }}>
+            <p style={{ fontSize: "0.82rem", color: "var(--muted-foreground)", margin: 0 }}>
+              Đóng đủ quỹ là có quà · Quẩy ngay nhận Voucher & Free sân cực cháy 🔥
+            </p>
+            {/* Hũ Quỹ Thưởng Từ Nộp Phạt */}
+            <div
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "6px",
+                background: "linear-gradient(135deg, rgba(234,179,8,0.15), rgba(15,23,42,0.8))",
+                border: "1px solid rgba(234,179,8,0.4)",
+                padding: "3px 10px",
+                borderRadius: "20px",
+                fontSize: "0.78rem",
+                color: "#facc15",
+                fontWeight: 700,
+              }}
+            >
+              <span>💰 Quỹ thưởng (nộp phạt):</span>
+              <span style={{ fontSize: "0.88rem", color: "#fef08a" }}>
+                {new Intl.NumberFormat("vi-VN", { style: "currency", currency: "VND" }).format(poolBalance)}
+              </span>
+            </div>
+          </div>
         </div>
 
         {/* Tab switcher & Sound button */}
@@ -994,13 +1020,22 @@ export function LuckyWheelClient({ currentUser, loggedInMemberId }: LuckyWheelCl
                         <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                           <span>{rw.icon}</span>
                           <span style={{ fontSize: "0.8rem", fontWeight: 700, color: "#f8fafc" }}>{rw.label}</span>
+                          {(rw.discountAmount > 0 || rw.isFreeMatch) && (
+                            <span style={{
+                              fontSize: "0.65rem", padding: "1px 5px", borderRadius: "4px", fontWeight: 700,
+                              background: rw.isFreeMatch ? "rgba(239,68,68,0.2)" : "rgba(34,197,94,0.15)",
+                              color: rw.isFreeMatch ? "#f87171" : "#4ade80",
+                            }}>
+                              {rw.isFreeMatch ? "Free sân" : `-${new Intl.NumberFormat("vi-VN",{style:"currency",currency:"VND"}).format(rw.discountAmount)}`}
+                            </span>
+                          )}
                         </div>
                         <span style={{ fontSize: "0.68rem", color: "#4ade80", fontWeight: 700 }}>Khả dụng</span>
                       </div>
                     ))
                   ) : (
                     <div style={{ fontSize: "0.75rem", color: "var(--muted-foreground)", textAlign: "center", padding: "12px 0" }}>
-                      Chưa có voucher nào. Hãy quay thưởng để trúng Discount 5k & Free sân!
+                      Chưa có voucher nào. Hãy quay thưởng để trúng Discount 2k/5k/10k & Free sân!
                     </div>
                   )}
                 </div>
@@ -1138,6 +1173,8 @@ export function LuckyWheelClient({ currentUser, loggedInMemberId }: LuckyWheelCl
                             ? "rgba(236,72,153,0.2)"
                             : opt.rewardType === "DISCOUNT_5K"
                             ? "rgba(34,197,94,0.2)"
+                            : opt.rewardType === "DISCOUNT_2K"
+                            ? "rgba(20,184,166,0.2)"
                             : opt.rewardType === "MOTM_NEXT_MATCH"
                             ? "rgba(234,179,8,0.2)"
                             : opt.rewardType === "FREE_DRINK"
@@ -1150,6 +1187,8 @@ export function LuckyWheelClient({ currentUser, loggedInMemberId }: LuckyWheelCl
                             ? "#f472b6"
                             : opt.rewardType === "DISCOUNT_5K"
                             ? "#4ade80"
+                            : opt.rewardType === "DISCOUNT_2K"
+                            ? "#2dd4bf"
                             : opt.rewardType === "MOTM_NEXT_MATCH"
                             ? "#facc15"
                             : opt.rewardType === "FREE_DRINK"
@@ -1163,6 +1202,8 @@ export function LuckyWheelClient({ currentUser, loggedInMemberId }: LuckyWheelCl
                         ? "🎁 Giảm 10k"
                         : opt.rewardType === "DISCOUNT_5K"
                         ? "💵 Giảm 5k"
+                        : opt.rewardType === "DISCOUNT_2K"
+                        ? "🪙 Giảm 2k"
                         : opt.rewardType === "MOTM_NEXT_MATCH"
                         ? "⭐ Làm MOTM"
                         : opt.rewardType === "FREE_DRINK"
@@ -1250,6 +1291,7 @@ export function LuckyWheelClient({ currentUser, loggedInMemberId }: LuckyWheelCl
                       }}
                     >
                       <option value="NONE">🎈 Quà vui vẻ / Tinh thần</option>
+                      <option value="DISCOUNT_2K">🪙 Giảm 2k tiền sân</option>
                       <option value="DISCOUNT_5K">💵 Giảm 5k tiền sân</option>
                       <option value="DISCOUNT_10K">🎁 Giảm 10k tiền sân</option>
                       <option value="MOTM_NEXT_MATCH">⭐ Làm MOTM trận sau</option>
@@ -1426,9 +1468,9 @@ export function LuckyWheelClient({ currentUser, loggedInMemberId }: LuckyWheelCl
 
             <div style={{ fontSize: "0.85rem", color: "var(--muted-foreground)", lineHeight: 1.5 }}>
               Chúc mừng <strong>{selectedMember.name}</strong> đã ẵm được quà!
-              {(winningPrize.rewardType === "DISCOUNT_5K" || winningPrize.discountAmount) && (
+              {(["DISCOUNT_2K","DISCOUNT_5K","DISCOUNT_10K"].includes(winningPrize.rewardType) || (winningPrize.discountAmount ?? 0) > 0) && (
                 <div style={{ marginTop: "6px", color: "#4ade80", fontWeight: 700 }}>
-                  🎟️ Đã nạp Voucher giảm 5.000đ vào ví! Trận sau trừ tiền lun nha!
+                  🎟️ Đã nạp Voucher giảm {new Intl.NumberFormat("vi-VN",{style:"currency",currency:"VND"}).format(winningPrize.discountAmount ?? 0)} vào ví! Trận sau trừ tiền lun nha!
                 </div>
               )}
               {(winningPrize.rewardType === "FREE_MATCH" || winningPrize.isFreeMatch) && (

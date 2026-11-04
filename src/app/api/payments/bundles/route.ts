@@ -95,20 +95,33 @@ export async function POST(req: NextRequest) {
     // Buoc 3: Tinh toan (pure JS)
     const bundleCode = generateBundleCode();
     let discount = 0;
-    const { rewardId } = body as { rewardId?: string };
-    if (rewardId) {
-      const reward = await prisma.memberReward.findFirst({
-        where: { id: rewardId, memberId, isUsed: false },
+    const { rewardId, rewardIds } = body as { rewardId?: string; rewardIds?: string[] };
+    
+    // Gộp danh sách voucher áp dụng (hỗ trợ cả rewardId đơn lẻ và mảng rewardIds)
+    const rawIds = Array.isArray(rewardIds) ? rewardIds : rewardId ? [rewardId] : [];
+    const targetRewardIds = Array.from(new Set(rawIds.filter(Boolean)));
+
+    if (targetRewardIds.length > 0) {
+      const activeRewards = await prisma.memberReward.findMany({
+        where: {
+          id: { in: targetRewardIds },
+          memberId,
+          isUsed: false,
+        },
       });
-      if (reward) {
+
+      for (const reward of activeRewards) {
         if (reward.isFreeMatch) {
-          discount = records[0] ? Math.max(0, records[0].amountRequired - records[0].amountPaid) : 0;
+          discount += records[0] ? Math.max(0, records[0].amountRequired - records[0].amountPaid) : 0;
         } else if (reward.discountAmount > 0) {
-          discount = reward.discountAmount;
+          discount += reward.discountAmount;
         }
+      }
+
+      if (activeRewards.length > 0) {
         // Đánh dấu đã dùng voucher gắn với mã bundle này
-        await prisma.memberReward.update({
-          where: { id: reward.id },
+        await prisma.memberReward.updateMany({
+          where: { id: { in: activeRewards.map((r) => r.id) } },
           data: {
             isUsed: true,
             usedAt: new Date(),

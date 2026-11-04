@@ -2,6 +2,8 @@ import crypto from "crypto";
 import { prisma } from "@/lib/prisma";
 import { RecordStatus, PayMethod, BundleStatus } from "@prisma/client";
 import { checkAndAwardCleanPaymentSpin } from "@/lib/rewards";
+import { addToRewardPool } from "@/lib/rewardPool";
+import { LATE_PENALTY_SESSION_CODE } from "@/lib/fee-calculator";
 
 /**
  * Verify SePay HMAC-SHA256 signature or Secret Token
@@ -187,7 +189,13 @@ export async function processSepayTransaction(
         status: { not: BundleStatus.PAID },
       },
       include: {
-        items: { include: { record: true } },
+        items: {
+          include: {
+            record: {
+              include: { session: { select: { code: true } } },
+            },
+          },
+        },
         member: { select: { code: true } },
       },
     });
@@ -200,7 +208,13 @@ export async function processSepayTransaction(
         },
         orderBy: { createdAt: "desc" },
         include: {
-          items: { include: { record: true } },
+          items: {
+            include: {
+              record: {
+                include: { session: { select: { code: true } } },
+              },
+            },
+          },
           member: { select: { code: true } },
         },
       });
@@ -254,6 +268,17 @@ export async function processSepayTransaction(
 
     // Thưởng lượt quay may mắn nếu thành viên đã đóng đủ tất cả các trận
     await checkAndAwardCleanPaymentSpin(bundle.memberId);
+
+    // Nếu bundle có chứa khoản phạt nộp chậm (LATE_PENALTY) -> cộng vào Quỹ thưởng
+    const penaltyItem = bundle.items.find(
+      (item) => item.record.session?.code === LATE_PENALTY_SESSION_CODE
+    );
+    if (penaltyItem && penaltyItem.record.amountRequired > 0) {
+      await addToRewardPool(
+        penaltyItem.record.amountRequired,
+        `Nộp phạt chậm bundle ${bundle.bundleCode} của ${bundle.member?.code}`
+      );
+    }
 
     console.log(`[SePay] Khớp thành công Bundle: ${bundle.bundleCode} cho TV ${bundle.member?.code}`);
     return {

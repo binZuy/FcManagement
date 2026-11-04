@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 import { checkAndAwardCleanPaymentSpin } from "@/lib/rewards";
+import { addToRewardPool } from "@/lib/rewardPool";
+import { LATE_PENALTY_SESSION_CODE } from "@/lib/fee-calculator";
 
 export async function PATCH(req: NextRequest, props: { params: Promise<{ id: string }> }) {
   try {
@@ -63,6 +65,10 @@ export async function PATCH(req: NextRequest, props: { params: Promise<{ id: str
 
     if (finalStatus === "PAID") {
       await checkAndAwardCleanPaymentSpin(record.memberId);
+      // Nếu là khoản phạt nộp chậm -> cộng vào quỹ thưởng
+      if (record.session?.code === LATE_PENALTY_SESSION_CODE && finalAmountPaid > 0) {
+        await addToRewardPool(finalAmountPaid, `Admin xác nhận nộp phạt chậm của member ${record.memberId}`);
+      }
     }
 
     return NextResponse.json(updatedRecord);

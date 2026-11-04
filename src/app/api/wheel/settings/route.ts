@@ -44,7 +44,14 @@ export async function POST(req: NextRequest) {
       color: opt.color || "#1e3a8a",
       weight: Math.max(0.01, Number(opt.weight) || 1),
       rewardType: opt.rewardType || "NONE",
-      discountAmount: opt.rewardType === "DISCOUNT_10K" ? 10000 : opt.rewardType === "DISCOUNT_5K" ? 5000 : (Number(opt.discountAmount) || 0),
+      discountAmount:
+        opt.rewardType === "DISCOUNT_10K"
+          ? 10000
+          : opt.rewardType === "DISCOUNT_5K"
+          ? 5000
+          : opt.rewardType === "DISCOUNT_2K"
+          ? 2000
+          : (Number(opt.discountAmount) || 0),
       isFreeMatch: opt.rewardType === "FREE_MATCH",
       isFreeDrink: opt.rewardType === "FREE_DRINK",
     }));

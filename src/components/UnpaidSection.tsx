@@ -62,7 +62,8 @@ export function UnpaidSection({
   const [selectedIds, setSelectedIds] = useState<Set<string>>(
     new Set(unpaidRecords.map((r) => r.id))
   );
-  const [appliedRewardId, setAppliedRewardId] = useState<string | null>(null);
+  // Hỗ trợ chọn nhiều voucher cùng lúc
+  const [appliedRewardIds, setAppliedRewardIds] = useState<string[]>([]);
   const [isBulkLoading, setIsBulkLoading] = useState(false);
   const [isBulkConfirming, setIsBulkConfirming] = useState(false);
 
@@ -121,14 +122,16 @@ export function UnpaidSection({
   const discountableRewards = activeRewards.filter((rw) => rw.discountAmount > 0 || rw.isFreeMatch);
   const perkRewards = activeRewards.filter((rw) => !rw.discountAmount && !rw.isFreeMatch);
 
-  // Tính discount nếu có voucher được áp dụng
-  const appliedReward = discountableRewards.find((rw) => rw.id === appliedRewardId);
+  // Tính discount nếu có voucher được áp dụng (hỗ trợ nhiều voucher)
+  const appliedRewards = discountableRewards.filter((rw) => appliedRewardIds.includes(rw.id));
   let discountAmount = 0;
-  if (appliedReward && selectedRecords.length > 0) {
-    if (appliedReward.isFreeMatch) {
-      discountAmount = selectedRecords[0] ? (selectedRecords[0].amountRequired - selectedRecords[0].amountPaid) : 0;
-    } else if (appliedReward.discountAmount > 0) {
-      discountAmount = appliedReward.discountAmount;
+  if (appliedRewards.length > 0 && selectedRecords.length > 0) {
+    for (const rw of appliedRewards) {
+      if (rw.isFreeMatch) {
+        discountAmount += selectedRecords[0] ? (selectedRecords[0].amountRequired - selectedRecords[0].amountPaid) : 0;
+      } else if (rw.discountAmount > 0) {
+        discountAmount += rw.discountAmount;
+      }
     }
   }
 
@@ -187,73 +190,86 @@ export function UnpaidSection({
             style={{
               width: "100%",
               display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              padding: "10px 14px",
+              flexDirection: "column",
+              padding: "12px 14px",
               borderRadius: "10px",
               background: "linear-gradient(135deg, rgba(34,197,94,0.12), rgba(15,23,42,0.85))",
               border: "1px solid rgba(34,197,94,0.35)",
-              flexWrap: "wrap",
-              gap: "8px",
+              gap: "10px",
             }}
           >
-            <div style={{ display: "flex", alignItems: "center", gap: "8px", flex: 1, minWidth: "220px" }}>
-              <span style={{ fontSize: "1.3rem" }}>🎟️</span>
-              <div>
-                <div style={{ fontSize: "0.82rem", fontWeight: 700, color: "#4ade80" }}>
-                  {appliedReward
-                    ? `Đang áp dụng: ${appliedReward.icon} ${appliedReward.label} (-${formatCurrency(discountAmount)})`
-                    : `Bạn có ${discountableRewards.length} Voucher giảm tiền sân!`}
-                </div>
-                <div style={{ fontSize: "0.72rem", color: "var(--muted-foreground)" }}>
-                  {appliedReward
-                    ? `Được trừ thẳng ${formatCurrency(discountAmount)} khi quét mã QR thanh toán`
-                    : "Áp dụng voucher để trừ tiền sân trực tiếp vào mã QR"}
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "8px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <span style={{ fontSize: "1.3rem" }}>🎟️</span>
+                <div>
+                  <div style={{ fontSize: "0.82rem", fontWeight: 700, color: "#4ade80" }}>
+                    {appliedRewards.length > 0
+                      ? `Đang áp dụng ${appliedRewards.length} Voucher (-${formatCurrency(discountAmount)})`
+                      : `Bạn có ${discountableRewards.length} Voucher giảm tiền sân! (Có thể chọn nhiều)`}
+                  </div>
+                  <div style={{ fontSize: "0.72rem", color: "var(--muted-foreground)" }}>
+                    {appliedRewards.length > 0
+                      ? `Được trừ thẳng ${formatCurrency(discountAmount)} khi quét mã QR thanh toán`
+                      : "Tick chọn các voucher bên dưới để trừ tiền sân trực tiếp"}
+                  </div>
                 </div>
               </div>
-            </div>
 
-            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-              {discountableRewards.length > 1 ? (
-                <select
-                  value={appliedRewardId ?? ""}
-                  onChange={(e) => setAppliedRewardId(e.target.value || null)}
-                  className="form-input"
-                  style={{
-                    padding: "4px 8px",
-                    borderRadius: "6px",
-                    background: "#0f172a",
-                    borderColor: "rgba(34,197,94,0.4)",
-                    color: "white",
-                    fontSize: "0.75rem",
-                    fontWeight: 600,
-                  }}
-                >
-                  <option value="">-- Không dùng voucher --</option>
-                  {discountableRewards.map((rw) => (
-                    <option key={rw.id} value={rw.id}>
-                      {rw.icon} {rw.label} {rw.discountAmount > 0 ? `(-${formatCurrency(rw.discountAmount)})` : "(Free sân)"}
-                    </option>
-                  ))}
-                </select>
-              ) : (
+              {appliedRewards.length > 0 && (
                 <button
                   type="button"
-                  onClick={() => setAppliedRewardId(appliedRewardId ? null : discountableRewards[0].id)}
+                  onClick={() => setAppliedRewardIds([])}
                   style={{
-                    padding: "5px 12px",
+                    padding: "3px 8px",
                     borderRadius: "6px",
-                    background: appliedRewardId ? "#22c55e" : "rgba(34,197,94,0.2)",
-                    color: appliedRewardId ? "#ffffff" : "#4ade80",
-                    border: "1px solid rgba(34,197,94,0.4)",
-                    fontSize: "0.75rem",
-                    fontWeight: 700,
+                    background: "rgba(239,68,68,0.15)",
+                    color: "#f87171",
+                    border: "1px solid rgba(239,68,68,0.3)",
+                    fontSize: "0.7rem",
                     cursor: "pointer",
                   }}
                 >
-                  {appliedRewardId ? "✓ Đã áp dụng" : "Dùng Voucher"}
+                  Bỏ chọn tất cả
                 </button>
               )}
+            </div>
+
+            {/* Danh sách các voucher tiền sân để click chọn nhiều */}
+            <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+              {discountableRewards.map((rw) => {
+                const isSelected = appliedRewardIds.includes(rw.id);
+                return (
+                  <button
+                    key={rw.id}
+                    type="button"
+                    onClick={() => {
+                      setAppliedRewardIds((prev) =>
+                        prev.includes(rw.id) ? prev.filter((id) => id !== rw.id) : [...prev, rw.id]
+                      );
+                    }}
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "6px",
+                      padding: "6px 12px",
+                      borderRadius: "8px",
+                      background: isSelected ? "rgba(34,197,94,0.25)" : "rgba(15,23,42,0.6)",
+                      border: isSelected ? "1px solid #4ade80" : "1px solid rgba(255,255,255,0.1)",
+                      color: isSelected ? "#4ade80" : "var(--muted-foreground)",
+                      fontSize: "0.75rem",
+                      fontWeight: 600,
+                      cursor: "pointer",
+                      transition: "all 0.15s ease",
+                    }}
+                  >
+                    <span>{isSelected ? "✅" : rw.icon}</span>
+                    <span>{rw.label}</span>
+                    <span style={{ fontWeight: 700, color: isSelected ? "#86efac" : "white" }}>
+                      {rw.discountAmount > 0 ? `-${formatCurrency(rw.discountAmount)}` : "(Free sân)"}
+                    </span>
+                  </button>
+                );
+              })}
             </div>
           </div>
         )}
@@ -307,7 +323,8 @@ export function UnpaidSection({
               memberName={memberName}
               selectedRecordIds={Array.from(selectedIds)}
               selectedTotalAmount={finalTotalAmount}
-              rewardId={appliedRewardId}
+              rewardId={appliedRewardIds[0] || null}
+              rewardIds={appliedRewardIds}
             />
           </div>
         )}
