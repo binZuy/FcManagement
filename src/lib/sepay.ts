@@ -225,6 +225,34 @@ export async function processSepayTransaction(
       return { matched: false, memberCode: memberCode ?? undefined, bundleCode };
     }
 
+    // ── KIỂM TRA SỐ TIỀN CHUYỂN KHOẢN VỚI TỔNG TIỀN BUNDLE ──
+    // Nếu chuyển ít hơn tổng tiền bundle (dung sai 1đ làm tròn):
+    // Không tự động đánh dấu PAID mà chuyển sang chế độ chờ Admin xác nhận thủ công!
+    if (payload.transferAmount < bundle.totalAmount - 1) {
+      console.warn(
+        `[SePay] ⚠️ Giao dịch chuyển thiếu tiền cho Bundle ${bundle.bundleCode} của ${bundle.member?.code}: ` +
+        `Chuyển ${payload.transferAmount}đ / Cần ${bundle.totalAmount}đ. ` +
+        `Chuyển sang chế độ xác nhận thủ công.`
+      );
+
+      // Lưu liên kết thành viên & mã bundle vào giao dịch để Admin tra cứu và xác nhận thủ công
+      await prisma.sepayTransaction.update({
+        where: { id: tx.id },
+        data: {
+          isMatched: false,
+          matchedMemberId: bundle.memberId,
+          matchedMemberCode: bundle.member?.code ?? memberCode,
+          matchedBundleCode: bundle.bundleCode,
+        },
+      });
+
+      return {
+        matched: false,
+        memberCode: bundle.member?.code ?? memberCode ?? undefined,
+        bundleCode: bundle.bundleCode,
+      };
+    }
+
     // Cập nhật tất cả records trong bundle thành PAID và bundle thành PAID (dù đã quá hạn)
     await prisma.$transaction([
       ...bundle.items.map((item) =>
@@ -305,6 +333,28 @@ export async function processSepayTransaction(
       where: { sessionId_memberId: { sessionId: session.id, memberId: member.id } },
     });
     if (!record || record.status === RecordStatus.PAID) {
+      return { matched: false, memberCode, sessionCode };
+    }
+
+    // ── KIỂM TRA SỐ TIỀN CHUYỂN KHOẢN VỚI SỐ TIỀN PHIÊN ──
+    // Nếu chuyển ít hơn số tiền cần nộp (dung sai 1đ làm tròn):
+    if (payload.transferAmount < record.amountRequired - 1) {
+      console.warn(
+        `[SePay] ⚠️ Giao dịch chuyển thiếu tiền cho Session ${sessionCode} của ${memberCode}: ` +
+        `Chuyển ${payload.transferAmount}đ / Cần ${record.amountRequired}đ. ` +
+        `Chuyển sang chế độ xác nhận thủ công.`
+      );
+
+      await prisma.sepayTransaction.update({
+        where: { id: tx.id },
+        data: {
+          isMatched: false,
+          matchedMemberId: member.id,
+          matchedMemberCode: member.code,
+          matchedSessionCode: sessionCode,
+        },
+      });
+
       return { matched: false, memberCode, sessionCode };
     }
 
