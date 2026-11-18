@@ -65,6 +65,33 @@ function buildClientQRUrl(
   return `${base}?${q.toString()}`;
 }
 
+/**
+ * Tải ảnh QR về dạng Blob (fetch trước, fallback canvas nếu CORS chặn).
+ */
+async function loadQrBlob(url: string): Promise<Blob> {
+  try {
+    const resp = await fetch(url);
+    if (!resp.ok) throw new Error("fetch failed");
+    return await resp.blob();
+  } catch {
+    return await new Promise<Blob>((resolve, reject) => {
+      const img = new Image();
+      img.crossOrigin = "anonymous";
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        canvas.width = img.naturalWidth || 300;
+        canvas.height = img.naturalHeight || 300;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) { reject(new Error("no ctx")); return; }
+        ctx.drawImage(img, 0, 0);
+        canvas.toBlob((b) => { if (b) resolve(b); else reject(new Error("toBlob failed")); }, "image/png");
+      };
+      img.onerror = () => reject(new Error("img load failed"));
+      img.src = url;
+    });
+  }
+}
+
 const POPULAR_BANKS = [
   { code: "vcb", name: "Vietcombank", color: "#4ade80", bg: "rgba(34,197,94,0.14)", border: "rgba(34,197,94,0.3)" },
   { code: "mb", name: "MB Bank", color: "#60a5fa", bg: "rgba(96,165,250,0.14)", border: "rgba(96,165,250,0.3)" },
@@ -322,33 +349,11 @@ const BANK_APP_MAP: Record<string, string> = {
     setSaveStatus("saving");
     const fileName = `QR_ThanhToan_${memberCode}_${bundleCode || "FC"}.png`;
     try {
-      let blob: Blob;
-      try {
-        const resp = await fetch(qrUrl);
-        if (!resp.ok) throw new Error("fetch failed");
-        blob = await resp.blob();
-      } catch {
-        blob = await new Promise<Blob>((resolve, reject) => {
-          const img = new Image();
-          img.crossOrigin = "anonymous";
-          img.onload = () => {
-            const canvas = document.createElement("canvas");
-            canvas.width = img.naturalWidth || 300;
-            canvas.height = img.naturalHeight || 300;
-            const ctx = canvas.getContext("2d");
-            if (!ctx) { reject(new Error("no ctx")); return; }
-            ctx.drawImage(img, 0, 0);
-            canvas.toBlob((b) => { if (b) resolve(b); else reject(new Error("toBlob failed")); }, "image/png");
-          };
-          img.onerror = () => reject(new Error("img load failed"));
-          img.src = qrUrl;
-        });
-      }
-
+      const blob = await loadQrBlob(qrUrl);
       const file = new File([blob], fileName, { type: "image/png" });
       const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 
-      // Trên Mobile: ưu tiên mở Share sheet
+      // Mobile: ưu tiên Share sheet (cho phép "Lưu vào Ảnh")
       if (
         isMobile &&
         typeof navigator.share === "function" &&
@@ -356,17 +361,21 @@ const BANK_APP_MAP: Record<string, string> = {
         navigator.canShare({ files: [file] })
       ) {
         try {
-          await navigator.share({
-            files: [file],
-            title: "QR Thanh Toán FC",
-          });
+          await navigator.share({ files: [file], title: "QR Thanh Toán FC" });
           setSaveStatus("saved");
           setTimeout(() => setSaveStatus("idle"), 3000);
           return;
-        } catch { /* ignore user cancel */ }
+        } catch (err) {
+          // Người dùng chủ động huỷ share sheet -> không làm gì thêm
+          if (err instanceof DOMException && err.name === "AbortError") {
+            setSaveStatus("idle");
+            return;
+          }
+          // Lỗi khác -> thử tải trực tiếp bên dưới
+        }
       }
 
-      // Trên Máy tính (Web): tải file trực tiếp, không mở Share dialog thừa
+      // Tải file trực tiếp (không mở tab mới)
       const blobUrl = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = blobUrl;
@@ -379,9 +388,9 @@ const BANK_APP_MAP: Record<string, string> = {
       setSaveStatus("saved");
       setTimeout(() => setSaveStatus("idle"), 3000);
     } catch {
-      window.open(qrUrl, "_blank");
+      // Không mở tab mới: chỉ báo để người dùng nhấn giữ ảnh
       setSaveStatus("error");
-      setTimeout(() => setSaveStatus("idle"), 3000);
+      setTimeout(() => setSaveStatus("idle"), 4000);
     }
   };
 
@@ -567,6 +576,8 @@ const BANK_APP_MAP: Record<string, string> = {
                         style={{
                           padding: qrTemplate === "compact2" ? "8px" : "12px",
                           background: "white",
+                          colorScheme: "light",
+                          filter: "none",
                           borderRadius: "14px",
                           boxShadow: "0 0 0 1px rgba(34,197,94,0.3), 0 8px 30px rgba(0,0,0,0.4)",
                           width: "100%",

@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 
@@ -12,6 +12,10 @@ export const metadata: Metadata = {
     shortcut: "/football.png",
     apple: "/football.png",
   },
+};
+
+export const viewport: Viewport = {
+  colorScheme: "dark",
 };
 
 export default function RootLayout({
